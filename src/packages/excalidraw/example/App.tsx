@@ -252,10 +252,12 @@ export default function App({ appTitle, useCustom, customArgs }: AppProps) {
       return false;
     }
     await exportToClipboard({
-      elements: excalidrawAPI.getSceneElements(),
-      appState: excalidrawAPI.getAppState(),
-      files: excalidrawAPI.getFiles(),
-      type,
+      data: {
+        elements: excalidrawAPI.getSceneElements(),
+        appState: excalidrawAPI.getAppState(),
+        files: excalidrawAPI.getFiles(),
+      },
+      type: "json",
     });
     window.alert(`Copied to clipboard as ${type} successfully`);
   };
@@ -743,15 +745,17 @@ export default function App({ appTitle, useCustom, customArgs }: AppProps) {
                 return;
               }
               const svg = await exportToSvg({
-                elements: excalidrawAPI?.getSceneElements(),
-                appState: {
-                  ...initialData.appState,
-                  exportWithDarkMode,
-                  exportEmbedScene,
-                  width: 300,
-                  height: 100,
+                data: {
+                  elements: excalidrawAPI?.getSceneElements(),
+                  appState: {
+                    ...initialData.appState,
+                    exportWithDarkMode,
+                    exportEmbedScene,
+                    width: 300,
+                    height: 100,
+                  },
+                  files: excalidrawAPI?.getFiles(),
                 },
-                files: excalidrawAPI?.getFiles(),
               });
               appRef.current.querySelector(".export-svg").innerHTML =
                 svg.outerHTML;
@@ -767,14 +771,18 @@ export default function App({ appTitle, useCustom, customArgs }: AppProps) {
                 return;
               }
               const blob = await exportToBlob({
-                elements: excalidrawAPI?.getSceneElements(),
-                mimeType: "image/png",
-                appState: {
-                  ...initialData.appState,
-                  exportEmbedScene,
-                  exportWithDarkMode,
+                data: {
+                  elements: excalidrawAPI?.getSceneElements(),
+                  appState: {
+                    ...initialData.appState,
+                    exportEmbedScene,
+                    exportWithDarkMode,
+                  },
+                  files: excalidrawAPI?.getFiles(),
                 },
-                files: excalidrawAPI?.getFiles(),
+                config: {
+                  mimeType: "image/png",
+                },
               });
               setBlobUrl(window.URL.createObjectURL(blob));
             }}
@@ -791,12 +799,14 @@ export default function App({ appTitle, useCustom, customArgs }: AppProps) {
                 return;
               }
               const canvas = await exportToCanvas({
-                elements: excalidrawAPI.getSceneElements(),
-                appState: {
-                  ...initialData.appState,
-                  exportWithDarkMode,
+                data: {
+                  elements: excalidrawAPI.getSceneElements(),
+                  appState: {
+                    ...initialData.appState,
+                    exportWithDarkMode,
+                  },
+                  files: excalidrawAPI.getFiles(),
                 },
-                files: excalidrawAPI.getFiles(),
               });
               const ctx = canvas.getContext("2d")!;
               ctx.font = "30px Virgil";
