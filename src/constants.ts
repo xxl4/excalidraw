@@ -68,6 +68,7 @@ export enum EVENT {
 export const ENV = {
   TEST: "test",
   DEVELOPMENT: "development",
+  PRODUCTION: "production",
 };
 
 export const CLASSES = {
