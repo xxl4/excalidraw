@@ -56,6 +56,15 @@ export type ExportToCanvasConfig = {
    * `scale`.
    */
   maxWidthOrHeight?: number;
+  /**
+   * Scale the canvas content to be excatly this many pixels wide/tall.
+   *
+   * Cannot be used in conjunction with `maxWidthOrHeight`.
+   *
+   * Final dimensions can get smaller/larger if used in conjunction with
+   * `scale`.
+   */
+  widthOrHeight?: number;
   // -------------------------------------------------------------------------
   /**
    * Width of the frame. Supply `x` or `y` if you want to ofsset the canvas
@@ -206,6 +215,13 @@ export const exportToCanvas = async ({
   cfg.position = cfg.position ?? "center";
   cfg.padding = cfg.padding ?? DEFAULT_EXPORT_PADDING;
 
+  if (cfg.maxWidthOrHeight != null && cfg.widthOrHeight != null) {
+    if (process.env.NODE_ENV !== ENV.PRODUCTION) {
+      console.warn("`maxWidthOrHeight` is ignored when `widthOrHeight` is set");
+    }
+    cfg.maxWidthOrHeight = undefined;
+  }
+
   if (
     (cfg.maxWidthOrHeight != null || cfg.width != null || cfg.height != null) &&
     cfg.getDimensions
@@ -232,10 +248,15 @@ export const exportToCanvas = async ({
   // variables for target bounding box
   let [x, y, width, height] = origCanvasSize;
 
-  if (cfg.maxWidthOrHeight != null) {
-    // calculate by how much do we need to scale the canvas to fit into the
-    // target dimension (e.g. target: max 50px, actual: 70x100px => scale: 0.5)
-    canvasScale = cfg.maxWidthOrHeight / Math.max(origWidth, origHeight);
+  if (cfg.maxWidthOrHeight != null || cfg.widthOrHeight != null) {
+    const max = Math.max(origWidth, origHeight);
+    if (cfg.widthOrHeight != null) {
+      // calculate by how much do we need to scale the canvas to fit into the
+      // target dimension (e.g. target: max 50px, actual: 70x100px => scale: 0.5)
+      canvasScale = cfg.widthOrHeight / max;
+    } else if (cfg.maxWidthOrHeight != null) {
+      canvasScale = cfg.maxWidthOrHeight < max ? cfg.maxWidthOrHeight / max : 1;
+    }
 
     width *= canvasScale;
     height *= canvasScale;
@@ -367,6 +388,9 @@ export const exportToSvg = async (
     exportEmbedScene?: boolean;
   },
   files: BinaryFiles | null,
+  opts?: {
+    serializeAsJSON?: () => string;
+  },
 ): Promise<SVGSVGElement> => {
   const {
     exportPadding = DEFAULT_EXPORT_PADDING,
@@ -380,7 +404,9 @@ export const exportToSvg = async (
       metadata = await (
         await import(/* webpackChunkName: "image" */ "../../src/data/image")
       ).encodeSvgMetadata({
-        text: serializeAsJSON(elements, appState, files || {}, "local"),
+        text: opts?.serializeAsJSON
+          ? opts?.serializeAsJSON?.()
+          : serializeAsJSON(elements, appState, files || {}, "local"),
       });
     } catch (error: any) {
       console.error(error);

@@ -1,6 +1,7 @@
 import cssVariables from "./css/variables.module.scss";
 import { AppProps, NormalizedZoomValue } from "./types";
-import { FontFamilyValues } from "./element/types";
+import { ExcalidrawElement, FontFamilyValues } from "./element/types";
+import oc from "open-color";
 
 export const isDarwin = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 export const isWindows = /^Win/.test(navigator.platform);
@@ -9,6 +10,12 @@ export const isFirefox =
   "netscape" in window &&
   navigator.userAgent.indexOf("rv:") > 1 &&
   navigator.userAgent.indexOf("Gecko") > 1;
+export const isChrome = navigator.userAgent.indexOf("Chrome") !== -1;
+export const isSafari =
+  !isChrome && navigator.userAgent.indexOf("Safari") !== -1;
+// keeping function so it can be mocked in test
+export const isBrave = () =>
+  (navigator as any).brave?.isBrave?.name === "isBrave";
 
 export const APP_NAME = "Excalidraw";
 
@@ -252,3 +259,23 @@ export const ROUNDNESS = {
 /** key containt id of precedeing elemnt id we use in reconciliation during
  * collaboration */
 export const PRECEDING_ELEMENT_KEY = "__precedingElement__";
+
+export const DEFAULT_ELEMENT_PROPS: {
+  strokeColor: ExcalidrawElement["strokeColor"];
+  backgroundColor: ExcalidrawElement["backgroundColor"];
+  fillStyle: ExcalidrawElement["fillStyle"];
+  strokeWidth: ExcalidrawElement["strokeWidth"];
+  strokeStyle: ExcalidrawElement["strokeStyle"];
+  roughness: ExcalidrawElement["roughness"];
+  opacity: ExcalidrawElement["opacity"];
+  locked: ExcalidrawElement["locked"];
+} = {
+  strokeColor: oc.black,
+  backgroundColor: "transparent",
+  fillStyle: "hachure",
+  strokeWidth: 1,
+  strokeStyle: "solid",
+  roughness: 1,
+  opacity: 100,
+  locked: false,
+};

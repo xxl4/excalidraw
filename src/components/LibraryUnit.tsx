@@ -2,7 +2,7 @@ import clsx from "clsx";
 import oc from "open-color";
 import { useEffect, useRef, useState } from "react";
 import { useDevice } from "../components/App";
-import { exportToSvg } from "../scene/export";
+import { exportToSvg } from "../packages/utils";
 import { LibraryItem } from "../types";
 import "./LibraryUnit.scss";
 import { CheckboxItem } from "./CheckboxItem";
@@ -36,14 +36,16 @@ export const LibraryUnit = ({
       if (!elements) {
         return;
       }
-      const svg = await exportToSvg(
-        elements,
-        {
-          exportBackground: false,
-          viewBackgroundColor: oc.white,
+      const svg = await exportToSvg({
+        data: {
+          elements,
+          appState: {
+            exportBackground: false,
+            viewBackgroundColor: oc.white,
+          },
+          files: null,
         },
-        null,
-      );
+      });
       svg.querySelector(".style-fonts")?.remove();
       node.innerHTML = svg.outerHTML;
     })();
