@@ -4,7 +4,6 @@ import {
   ExportToCanvasData,
   exportToSvg as _exportToSvg,
 } from "../scene/export";
-import { getDefaultAppState } from "../appState";
 import { getNonDeletedElements } from "../element";
 import { ExcalidrawElement } from "../element/types";
 import { restore } from "../data/restore";
@@ -173,15 +172,7 @@ export const exportToClipboard = async ({
   } else if (type === "png") {
     await copyBlobToClipboardAsPng(exportToBlob({ data, config }));
   } else if (type === "json") {
-    const appState = {
-      offsetTop: 0,
-      offsetLeft: 0,
-      width: 0,
-      height: 0,
-      ...getDefaultAppState(),
-      ...data.appState,
-    };
-    await copyToClipboard(data.elements, appState, data.files);
+    await copyToClipboard(data.elements, data.files);
   } else {
     throw new Error("Invalid export type");
   }
