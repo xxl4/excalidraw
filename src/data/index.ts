@@ -77,6 +77,7 @@ export const exportAsImage = async (
       padding: exportPadding,
       theme: appState.exportWithDarkMode ? "dark" : "light",
       scale: appState.exportScale,
+      fit: "none",
     },
   });
   tempCanvas.style.display = "none";

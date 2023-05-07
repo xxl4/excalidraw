@@ -41,10 +41,28 @@ export type ExportToCanvasConfig = {
    */
   canvasBackgroundColor?: string | false;
   /**
-   * Canvas padding in pixels. Affected by scale. Ignored if `fit` is set to
-   * `cover`.
+   * Canvas padding in pixels. Affected by `scale`.
    *
-   * @default 10
+   * When `fit` is set to `none`, padding is added to the content bounding box
+   * (including if you set `width` or `height` or `maxWidthOrHeight` or
+   * `widthOrHeight`).
+   *
+   * When `fit` set to `contain`, padding is subtracted from the content
+   * bounding box (ensuring the size doesn't exceed the supplied values, with
+   * the exeception of using alongside `scale` as noted above), and the padding
+   * serves as a minimum distance between the content and the canvas edges, as
+   * it may exceed the supplied padding value from one side or the other in
+   * order to maintain the aspect ratio. It is recommended to set `position`
+   * to `center` when using `fit=contain`.
+   *
+   * When `fit` is set to `cover`, padding is disabled (set to 0).
+   *
+   * When `fit` is set to `none` and either `width` or `height` or
+   * `maxWidthOrHeight` is set, padding is simply adding to the bounding box
+   * and the content may overflow the canvas, thus right or bottom padding
+   * may be ignored.
+   *
+   * @default 0
    */
   padding?: number;
   // -------------------------------------------------------------------------
@@ -57,7 +75,8 @@ export type ExportToCanvasConfig = {
    */
   maxWidthOrHeight?: number;
   /**
-   * Scale the canvas content to be excatly this many pixels wide/tall.
+   * Scale the canvas content to be excatly this many pixels wide/tall,
+   * maintaining the aspect ratio.
    *
    * Cannot be used in conjunction with `maxWidthOrHeight`.
    *
@@ -117,12 +136,15 @@ export type ExportToCanvasConfig = {
    * Behavior aligns with the `object-fit` CSS property.
    *
    * - `none`    - no scaling.
-   * - `contain` - scale to fit the frame.
+   * - `contain` - scale to fit the frame. Includes `padding`.
    * - `cover`   - scale to fill the frame while maintaining aspect ratio. If
    *               content overflows, it will be cropped.
    *
-   * @default "contain" unless `x` or `y` are specified, in which case "none"
-   * is used (forced).
+   * If `maxWidthOrHeight` or `widthOrHeight` is set, `fit` is ignored.
+   *
+   * @default "contain" unless `width`, `height`, `maxWidthOrHeight`, or
+   * `widthOrHeight` is specified in which case `none` is the default (can be
+   * changed). If `x` or `y` are specified, `none` is forced.
    */
   fit?: "none" | "contain" | "cover";
   /**
@@ -133,9 +155,11 @@ export type ExportToCanvasConfig = {
    * - `center` - canvas is centered on the axis which is not specified
    *              (or both).
    *
+   * If `maxWidthOrHeight` or `widthOrHeight` is set, `position` is ignored.
+   *
    * @default "center"
    */
-  position?: "center" | "none";
+  position?: "center" | "topLeft";
   // -------------------------------------------------------------------------
   /**
    * A multiplier to increase/decrease the frame dimensions
@@ -189,31 +213,33 @@ export const exportToCanvas = async ({
   // clone
   const cfg = Object.assign({}, config);
 
+  cfg.fit =
+    cfg.fit ??
+    (cfg.width != null ||
+    cfg.height != null ||
+    cfg.maxWidthOrHeight != null ||
+    cfg.widthOrHeight != null
+      ? "contain"
+      : "none");
+
+  const containPadding = cfg.fit === "contain";
+
   if (cfg.x != null || cfg.x != null) {
-    if (cfg.fit != null && cfg.fit !== "none") {
-      if (process.env.NODE_ENV !== ENV.PRODUCTION) {
-        console.warn(
-          "`fit` will be ignored (automatically set to `none`) when you specify `x` or `y` offsets",
-        );
-      }
-    }
     cfg.fit = "none";
   }
 
-  cfg.fit = cfg.fit ?? "contain";
-
-  if (cfg.fit === "cover" && cfg.padding) {
-    if (process.env.NODE_ENV !== ENV.PRODUCTION) {
+  if (cfg.fit === "cover") {
+    if (cfg.padding && process.env.NODE_ENV !== ENV.PRODUCTION) {
       console.warn("`padding` is ignored when `fit` is set to `cover`");
     }
     cfg.padding = 0;
   }
 
+  cfg.padding = cfg.padding ?? 0;
   cfg.scale = cfg.scale ?? 1;
 
   cfg.origin = cfg.origin ?? "canvas";
   cfg.position = cfg.position ?? "center";
-  cfg.padding = cfg.padding ?? DEFAULT_EXPORT_PADDING;
 
   if (cfg.maxWidthOrHeight != null && cfg.widthOrHeight != null) {
     if (process.env.NODE_ENV !== ENV.PRODUCTION) {
@@ -241,15 +267,54 @@ export const exportToCanvas = async ({
   // scale the output further.
   let canvasScale = 1;
 
-  const origCanvasSize = getCanvasSize(elements, cfg.padding);
+  const origCanvasSize = getCanvasSize(elements);
+
+  // cfg.x = undefined;
+  // cfg.y = undefined;
 
   // variables for original content bounding box
   const [origX, origY, origWidth, origHeight] = origCanvasSize;
   // variables for target bounding box
   let [x, y, width, height] = origCanvasSize;
 
+  if (cfg.width != null) {
+    width = cfg.width;
+
+    if (cfg.padding && containPadding) {
+      width -= cfg.padding * 2;
+    }
+
+    if (cfg.height) {
+      height = cfg.height;
+      if (cfg.padding && containPadding) {
+        height -= cfg.padding * 2;
+      }
+    } else {
+      // if height not specified, scale the original height to match the new
+      // width while maintaining aspect ratio
+      height *= width / origWidth;
+    }
+  } else if (cfg.height != null) {
+    height = cfg.height;
+
+    if (cfg.padding && containPadding) {
+      height -= cfg.padding * 2;
+    }
+    // width not specified, so scale the original width to match the new
+    // height while maintaining aspect ratio
+    width *= height / origHeight;
+  }
+
   if (cfg.maxWidthOrHeight != null || cfg.widthOrHeight != null) {
-    const max = Math.max(origWidth, origHeight);
+    if (containPadding && cfg.padding) {
+      if (cfg.maxWidthOrHeight != null) {
+        cfg.maxWidthOrHeight -= cfg.padding * 2;
+      } else if (cfg.widthOrHeight != null) {
+        cfg.widthOrHeight -= cfg.padding * 2;
+      }
+    }
+
+    const max = Math.max(width, height);
     if (cfg.widthOrHeight != null) {
       // calculate by how much do we need to scale the canvas to fit into the
       // target dimension (e.g. target: max 50px, actual: 70x100px => scale: 0.5)
@@ -260,34 +325,37 @@ export const exportToCanvas = async ({
 
     width *= canvasScale;
     height *= canvasScale;
-  } else if (cfg.width != null) {
-    width = cfg.width;
-
-    if (cfg.height) {
-      height = cfg.height;
-    } else {
-      // if height not specified, scale the original height to match the new
-      // width while maintaining aspect ratio
-      height *= width / origWidth;
-    }
-  } else if (cfg.height != null) {
-    height = cfg.height;
-    // width not specified, so scale the original width to match the new
-    // height while maintaining aspect ratio
-    width *= height / origHeight;
   } else if (cfg.getDimensions) {
     const ret = cfg.getDimensions(width, height);
 
     width = ret.width;
     height = ret.height;
     cfg.scale = ret.scale ?? cfg.scale;
+  } else if (
+    containPadding &&
+    cfg.padding &&
+    cfg.width == null &&
+    cfg.height == null
+  ) {
+    const whRatio = width / height;
+    width -= cfg.padding * 2;
+    height -= (cfg.padding * 2) / whRatio;
   }
 
-  if (cfg.fit === "contain" && !cfg.maxWidthOrHeight) {
-    const wRatio = width / origWidth;
-    const hRatio = height / origHeight;
-    // scale the orig canvas to fit in the target frame
-    canvasScale = Math.min(wRatio, hRatio);
+  if (
+    (cfg.fit === "contain" && !cfg.maxWidthOrHeight) ||
+    (containPadding && cfg.padding)
+  ) {
+    if (cfg.fit === "contain") {
+      const wRatio = width / origWidth;
+      const hRatio = height / origHeight;
+      // scale the orig canvas to fit in the target frame
+      canvasScale = Math.min(wRatio, hRatio);
+    } else {
+      const wRatio = (width - cfg.padding * 2) / width;
+      const hRatio = (height - cfg.padding * 2) / height;
+      canvasScale = Math.min(wRatio, hRatio);
+    }
   } else if (cfg.fit === "cover") {
     const wRatio = width / origWidth;
     const hRatio = height / origHeight;
@@ -314,26 +382,32 @@ export const exportToCanvas = async ({
   // We divide width/height by canvasScale so that we calculate in the original
   // aspect ratio dimensions.
   if (cfg.position === "center") {
-    if (cfg.x == null) {
-      x -= width / canvasScale / 2 - origWidth / 2;
-    }
-    if (cfg.y == null) {
-      y -= height / canvasScale / 2 - origHeight / 2;
-    }
+    x -=
+      width / canvasScale / 2 -
+      (cfg.x == null ? origWidth : width + cfg.padding * 2) / 2;
+    y -=
+      height / canvasScale / 2 -
+      (cfg.y == null ? origHeight : height + cfg.padding * 2) / 2;
   }
 
   const canvas = cfg.createCanvas
     ? cfg.createCanvas()
     : document.createElement("canvas");
 
+  // rescale padding based on current canvasScale factor so that the resulting
+  // padding is kept the same as supplied by user (with the exception of
+  // `cfg.scale` being set, which also scales the padding)
+  const normalizedPadding = cfg.padding / canvasScale;
+
   // scale the whole frame by cfg.scale (on top of whatever canvasScale we
   // calculated above)
   canvasScale *= cfg.scale;
+
   width *= cfg.scale;
   height *= cfg.scale;
 
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = width + cfg.padding * 2 * cfg.scale;
+  canvas.height = height + cfg.padding * 2 * cfg.scale;
 
   const { imageCache } = await updateImageCache({
     imageCache: new Map(),
@@ -342,6 +416,8 @@ export const exportToCanvas = async ({
     ),
     files: files || {},
   });
+
+  // console.log(elements, width, height, cfg, canvasScale);
 
   renderScene({
     elements,
@@ -356,8 +432,8 @@ export const exportToCanvas = async ({
           : cfg.canvasBackgroundColor ||
             appState.viewBackgroundColor ||
             DEFAULT_BACKGROUND_COLOR,
-      scrollX: -x + cfg.padding,
-      scrollY: -y + cfg.padding,
+      scrollX: -x + normalizedPadding,
+      scrollY: -y + normalizedPadding,
       canvasScale,
       zoom: { value: DEFAULT_ZOOM_VALUE },
       remotePointerViewportCoords: {},
@@ -412,7 +488,7 @@ export const exportToSvg = async (
       console.error(error);
     }
   }
-  const [minX, minY, width, height] = getCanvasSize(elements, exportPadding);
+  const [minX, minY, width, height] = getCanvasSize(elements);
 
   // initialize SVG root
   const svgRoot = document.createElementNS(SVG_NS, "svg");
@@ -476,25 +552,12 @@ export const exportToSvg = async (
 };
 
 // calculate smallest area to fit the contents in
-const getCanvasSize = (
+export const getCanvasSize = (
   elements: readonly NonDeletedExcalidrawElement[],
-  exportPadding: number,
 ): [minX: number, minY: number, width: number, height: number] => {
   const [minX, minY, maxX, maxY] = getCommonBounds(elements);
-  const width = distance(minX, maxX) + exportPadding * 2;
-  const height = distance(minY, maxY) + exportPadding + exportPadding;
+  const width = distance(minX, maxX);
+  const height = distance(minY, maxY);
 
   return [minX, minY, width, height];
-};
-
-export const getExportSize = (
-  elements: readonly NonDeletedExcalidrawElement[],
-  padding: number,
-  scale: number,
-): [number, number] => {
-  const [, , width, height] = getCanvasSize(elements, padding).map(
-    (dimension) => Math.trunc(dimension * scale),
-  );
-
-  return [width, height];
 };
