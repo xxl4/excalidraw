@@ -2,17 +2,22 @@ import clsx from "clsx";
 import React from "react";
 import { ActionManager } from "../actions/manager";
 import { CLASSES, DEFAULT_SIDEBAR, LIBRARY_SIDEBAR_WIDTH } from "../constants";
-import { exportAsImage } from "../data";
-import { isTextElement, showSelectedShapeActions } from "../element";
+import { showSelectedShapeActions } from "../element";
 import { NonDeletedExcalidrawElement } from "../element/types";
 import { Language, t } from "../i18n";
 import { calculateScrollCenter } from "../scene";
-import { ExportType } from "../scene/types";
-import { AppProps, AppState, ExcalidrawProps, BinaryFiles } from "../types";
-import { capitalizeString, isShallowEqual, muteFSAbortError } from "../utils";
+import {
+  AppProps,
+  AppState,
+  ExcalidrawProps,
+  BinaryFiles,
+  UIAppState,
+  AppClassProperties,
+} from "../types";
+import { capitalizeString, isShallowEqual } from "../utils";
 import { SelectedShapeActions, ShapesSwitcher } from "./Actions";
 import { ErrorDialog } from "./ErrorDialog";
-import { ExportCB, ImageExportDialog } from "./ImageExportDialog";
+import { ImageExportDialog } from "./ImageExportDialog";
 import { FixedSideContainer } from "./FixedSideContainer";
 import { HintViewer } from "./HintViewer";
 import { Island } from "./Island";
@@ -25,7 +30,6 @@ import { HelpDialog } from "./HelpDialog";
 import Stack from "./Stack";
 import { UserList } from "./UserList";
 import { JSONExportDialog } from "./JSONExportDialog";
-import { isImageFileHandle } from "../data/blob";
 import { PenModeButton } from "./PenModeButton";
 import { trackEvent } from "../analytics";
 import { useDevice } from "../components/App";
@@ -34,24 +38,30 @@ import { actionToggleStats } from "../actions/actionToggleStats";
 import Footer from "./footer/Footer";
 import { isSidebarDockedAtom } from "./Sidebar/Sidebar";
 import { jotaiScope } from "../jotai";
-import { Provider, useAtomValue } from "jotai";
+import { Provider, useAtom, useAtomValue } from "jotai";
 import MainMenu from "./main-menu/MainMenu";
 import { ActiveConfirmDialog } from "./ActiveConfirmDialog";
+import { OverwriteConfirmDialog } from "./OverwriteConfirm/OverwriteConfirm";
 import { HandButton } from "./HandButton";
 import { isHandToolActive } from "../appState";
 import { TunnelsContext, useInitializeTunnels } from "../context/tunnels";
 import { LibraryIcon } from "./icons";
 import { UIAppStateContext } from "../context/ui-appState";
 import { DefaultSidebar } from "./DefaultSidebar";
+import { EyeDropper, activeEyeDropperAtom } from "./EyeDropper";
 
 import "./LayerUI.scss";
 import "./Toolbar.scss";
+import { mutateElement } from "../element/mutateElement";
+import { ShapeCache } from "../scene/ShapeCache";
+import Scene from "../scene/Scene";
 
 interface LayerUIProps {
   actionManager: ActionManager;
-  appState: AppState;
+  appState: UIAppState;
   files: BinaryFiles;
-  canvas: HTMLCanvasElement | null;
+  canvas: HTMLCanvasElement;
+  interactiveCanvas: HTMLCanvasElement | null;
   setAppState: React.Component<any, AppState>["setState"];
   elements: readonly NonDeletedExcalidrawElement[];
   onLockToggle: () => void;
@@ -63,8 +73,10 @@ interface LayerUIProps {
   renderCustomStats?: ExcalidrawProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
   onImageAction: (data: { insertOnCanvasDirectly: boolean }) => void;
+  onExportImage: AppClassProperties["onExportImage"];
   renderWelcomeScreen: boolean;
   children?: React.ReactNode;
+  app: AppClassProperties;
 }
 
 const DefaultMainMenu: React.FC<{
@@ -93,6 +105,15 @@ const DefaultMainMenu: React.FC<{
   );
 };
 
+const DefaultOverwriteConfirmDialog = () => {
+  return (
+    <OverwriteConfirmDialog __fallback>
+      <OverwriteConfirmDialog.Actions.SaveToDisk />
+      <OverwriteConfirmDialog.Actions.ExportToImage />
+    </OverwriteConfirmDialog>
+  );
+};
+
 const LayerUI = ({
   actionManager,
   appState,
@@ -100,6 +121,7 @@ const LayerUI = ({
   setAppState,
   elements,
   canvas,
+  interactiveCanvas,
   onLockToggle,
   onHandToolToggle,
   onPenModeToggle,
@@ -108,11 +130,18 @@ const LayerUI = ({
   renderCustomStats,
   UIOptions,
   onImageAction,
+  onExportImage,
   renderWelcomeScreen,
   children,
+  app,
 }: LayerUIProps) => {
   const device = useDevice();
   const tunnels = useInitializeTunnels();
+
+  const [eyeDropperState, setEyeDropperState] = useAtom(
+    activeEyeDropperAtom,
+    jotaiScope,
+  );
 
   const renderJSONExportDialog = () => {
     if (!UIOptions.canvasActions.export) {
@@ -137,46 +166,14 @@ const LayerUI = ({
       return null;
     }
 
-    const createExporter =
-      (type: ExportType): ExportCB =>
-      async (exportedElements) => {
-        trackEvent("export", type, "ui");
-        const fileHandle = await exportAsImage(
-          type,
-          exportedElements,
-          appState,
-          files,
-          {
-            exportBackground: appState.exportBackground,
-            name: appState.name,
-            viewBackgroundColor: appState.viewBackgroundColor,
-          },
-        )
-          .catch(muteFSAbortError)
-          .catch((error) => {
-            console.error(error);
-            setAppState({ errorMessage: error.message });
-          });
-
-        if (
-          appState.exportEmbedScene &&
-          fileHandle &&
-          isImageFileHandle(fileHandle)
-        ) {
-          setAppState({ fileHandle });
-        }
-      };
-
     return (
       <ImageExportDialog
         elements={elements}
         appState={appState}
-        setAppState={setAppState}
         files={files}
         actionManager={actionManager}
-        onExportToPng={createExporter("png")}
-        onExportToSvg={createExporter("svg")}
-        onExportToClipboard={createExporter("clipboard")}
+        onExportImage={onExportImage}
+        onCloseRequest={() => setAppState({ openDialog: null })}
       />
     );
   };
@@ -224,12 +221,7 @@ const LayerUI = ({
     return (
       <FixedSideContainer side="top">
         <div className="App-menu App-menu_top">
-          <Stack.Col
-            gap={6}
-            className={clsx("App-menu_top__left", {
-              "disable-pointerEvents": appState.zenModeEnabled,
-            })}
-          >
+          <Stack.Col gap={6} className={clsx("App-menu_top__left")}>
             {renderCanvasActions()}
             {shouldRenderSelectedShapeActions && renderSelectedShapeActions()}
           </Stack.Col>
@@ -255,9 +247,9 @@ const LayerUI = ({
                       >
                         <HintViewer
                           appState={appState}
-                          elements={elements}
                           isMobile={device.isMobile}
                           device={device}
+                          app={app}
                         />
                         {heading}
                         <Stack.Row gap={1}>
@@ -274,7 +266,7 @@ const LayerUI = ({
                             title={t("toolBar.lock")}
                           />
 
-                          <div className="App-toolbar__divider"></div>
+                          <div className="App-toolbar__divider" />
 
                           <HandButton
                             checked={isHandToolActive(appState)}
@@ -285,7 +277,7 @@ const LayerUI = ({
 
                           <ShapesSwitcher
                             appState={appState}
-                            canvas={canvas}
+                            interactiveCanvas={interactiveCanvas}
                             activeTool={appState.activeTool}
                             setAppState={setAppState}
                             onImageAction={({ pointerType }) => {
@@ -368,6 +360,7 @@ const LayerUI = ({
       >
         {t("toolBar.library")}
       </DefaultSidebar.Trigger>
+      <DefaultOverwriteConfirmDialog />
       {/* ------------------------------------------------------------------ */}
 
       {appState.isLoading && <LoadingMessage delay={250} />}
@@ -375,6 +368,54 @@ const LayerUI = ({
         <ErrorDialog onClose={() => setAppState({ errorMessage: null })}>
           {appState.errorMessage}
         </ErrorDialog>
+      )}
+      {eyeDropperState && !device.isMobile && (
+        <EyeDropper
+          colorPickerType={eyeDropperState.colorPickerType}
+          onCancel={() => {
+            setEyeDropperState(null);
+          }}
+          onChange={(colorPickerType, color, selectedElements, { altKey }) => {
+            if (
+              colorPickerType !== "elementBackground" &&
+              colorPickerType !== "elementStroke"
+            ) {
+              return;
+            }
+
+            if (selectedElements.length) {
+              for (const element of selectedElements) {
+                mutateElement(
+                  element,
+                  {
+                    [altKey && eyeDropperState.swapPreviewOnAlt
+                      ? colorPickerType === "elementBackground"
+                        ? "strokeColor"
+                        : "backgroundColor"
+                      : colorPickerType === "elementBackground"
+                      ? "backgroundColor"
+                      : "strokeColor"]: color,
+                  },
+                  false,
+                );
+                ShapeCache.delete(element);
+              }
+              Scene.getScene(selectedElements[0])?.informMutation();
+            } else if (colorPickerType === "elementBackground") {
+              setAppState({
+                currentItemBackgroundColor: color,
+              });
+            } else {
+              setAppState({ currentItemStrokeColor: color });
+            }
+          }}
+          onSelect={(color, event) => {
+            setEyeDropperState((state) => {
+              return state?.keepOpenOnAlt && event.altKey ? state : null;
+            });
+            eyeDropperState?.onSelect?.(color, event);
+          }}
+        />
       )}
       {appState.openDialog === "help" && (
         <HelpDialog
@@ -384,6 +425,7 @@ const LayerUI = ({
         />
       )}
       <ActiveConfirmDialog />
+      <tunnels.OverwriteConfirmDialogTunnel.Out />
       {renderImageExportDialog()}
       {renderJSONExportDialog()}
       {appState.pasteDialog.shown && (
@@ -399,6 +441,7 @@ const LayerUI = ({
       )}
       {device.isMobile && (
         <MobileMenu
+          app={app}
           appState={appState}
           elements={elements}
           actionManager={actionManager}
@@ -408,7 +451,7 @@ const LayerUI = ({
           onLockToggle={onLockToggle}
           onHandToolToggle={onHandToolToggle}
           onPenModeToggle={onPenModeToggle}
-          canvas={canvas}
+          interactiveCanvas={interactiveCanvas}
           onImageAction={onImageAction}
           renderTopRightUI={renderTopRightUI}
           renderCustomStats={renderCustomStats}
@@ -420,13 +463,7 @@ const LayerUI = ({
       {!device.isMobile && (
         <>
           <div
-            className={clsx("layer-ui__wrapper", {
-              "disable-pointerEvents":
-                appState.draggingElement ||
-                appState.resizingElement ||
-                (appState.editingElement &&
-                  !isTextElement(appState.editingElement)),
-            })}
+            className="layer-ui__wrapper"
             style={
               appState.openSidebar &&
               isSidebarDocked &&
@@ -458,9 +495,9 @@ const LayerUI = ({
               <button
                 className="scroll-back-to-content"
                 onClick={() => {
-                  setAppState({
-                    ...calculateScrollCenter(elements, appState, canvas),
-                  });
+                  setAppState((appState) => ({
+                    ...calculateScrollCenter(elements, appState),
+                  }));
                 }}
               >
                 {t("buttons.scrollBackToContent")}
@@ -484,14 +521,15 @@ const LayerUI = ({
   );
 };
 
-const stripIrrelevantAppStateProps = (
-  appState: AppState,
-): Omit<
-  AppState,
-  "suggestedBindings" | "startBoundElement" | "cursorButton"
-> => {
-  const { suggestedBindings, startBoundElement, cursorButton, ...ret } =
-    appState;
+const stripIrrelevantAppStateProps = (appState: AppState): UIAppState => {
+  const {
+    suggestedBindings,
+    startBoundElement,
+    cursorButton,
+    scrollX,
+    scrollY,
+    ...ret
+  } = appState;
   return ret;
 };
 
@@ -501,13 +539,25 @@ const areEqual = (prevProps: LayerUIProps, nextProps: LayerUIProps) => {
     return false;
   }
 
-  const { canvas: _prevCanvas, appState: prevAppState, ...prev } = prevProps;
-  const { canvas: _nextCanvas, appState: nextAppState, ...next } = nextProps;
+  const {
+    canvas: _pC,
+    interactiveCanvas: _pIC,
+    appState: prevAppState,
+    ...prev
+  } = prevProps;
+  const {
+    canvas: _nC,
+    interactiveCanvas: _nIC,
+    appState: nextAppState,
+    ...next
+  } = nextProps;
 
   return (
     isShallowEqual(
-      stripIrrelevantAppStateProps(prevAppState),
-      stripIrrelevantAppStateProps(nextAppState),
+      // asserting AppState because we're being passed the whole AppState
+      // but resolve to only the UI-relevant props
+      stripIrrelevantAppStateProps(prevAppState as AppState),
+      stripIrrelevantAppStateProps(nextAppState as AppState),
       {
         selectedElementIds: isShallowEqual,
         selectedGroupIds: isShallowEqual,

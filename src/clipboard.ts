@@ -7,6 +7,9 @@ import { SVG_EXPORT_TAG } from "./scene/export";
 import { tryParseSpreadsheet, Spreadsheet, VALID_SPREADSHEET } from "./charts";
 import { EXPORT_DATA_TYPES, MIME_TYPES } from "./constants";
 import { isInitializedImageElement } from "./element/typeChecks";
+import { deepCopyElement } from "./element/newElement";
+import { mutateElement } from "./element/mutateElement";
+import { getContainingFrame } from "./frame";
 import { isPromiseLike, isTestEnv } from "./utils";
 
 type ElementsClipboard = {
@@ -21,6 +24,7 @@ export interface ClipboardData {
   files?: BinaryFiles;
   text?: string;
   errorMessage?: string;
+  programmaticAPI?: boolean;
 }
 
 let CLIPBOARD = "";
@@ -45,6 +49,7 @@ const clipboardContainsElements = (
     [
       EXPORT_DATA_TYPES.excalidraw,
       EXPORT_DATA_TYPES.excalidrawClipboard,
+      EXPORT_DATA_TYPES.excalidrawClipboardWithAPI,
     ].includes(contents?.type) &&
     Array.isArray(contents.elements)
   ) {
@@ -57,6 +62,9 @@ export const copyToClipboard = async (
   elements: readonly NonDeletedExcalidrawElement[],
   files: BinaryFiles | null,
 ) => {
+  const framesToCopy = new Set(
+    elements.filter((element) => element.type === "frame"),
+  );
   let foundFile = false;
 
   const _files = elements.reduce((acc, element) => {
@@ -78,7 +86,20 @@ export const copyToClipboard = async (
   // select binded text elements when copying
   const contents: ElementsClipboard = {
     type: EXPORT_DATA_TYPES.excalidrawClipboard,
-    elements,
+    elements: elements.map((element) => {
+      if (
+        getContainingFrame(element) &&
+        !framesToCopy.has(getContainingFrame(element)!)
+      ) {
+        const copiedElement = deepCopyElement(element);
+        mutateElement(copiedElement, {
+          frameId: null,
+        });
+        return copiedElement;
+      }
+
+      return element;
+    }),
     files: files ? _files : undefined,
   };
   const json = JSON.stringify(contents);
@@ -172,6 +193,8 @@ export const parseClipboard = async (
 
   try {
     const systemClipboardData = JSON.parse(systemClipboard);
+    const programmaticAPI =
+      systemClipboardData.type === EXPORT_DATA_TYPES.excalidrawClipboardWithAPI;
     if (clipboardContainsElements(systemClipboardData)) {
       return {
         elements: systemClipboardData.elements,
@@ -179,6 +202,7 @@ export const parseClipboard = async (
         text: isPlainPaste
           ? JSON.stringify(systemClipboardData.elements, null, 2)
           : undefined,
+        programmaticAPI,
       };
     }
   } catch (e) {}

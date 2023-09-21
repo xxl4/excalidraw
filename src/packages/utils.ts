@@ -44,7 +44,10 @@ type ExportToBlobConfig = ExportToCanvasConfig & {
 type ExportToSvgConfig = Pick<
   ExportToCanvasConfig,
   "canvasBackgroundColor" | "padding" | "theme"
->;
+> & {
+  exportPadding?: number;
+  renderEmbeddables?: boolean;
+};
 
 export const exportToBlob = async ({
   data,
@@ -134,6 +137,7 @@ export const exportToSvg = async ({
   const files = data.files || {};
 
   return _exportToSvg(passElementsSafely(elements), appState, files, {
+    renderEmbeddables: config?.renderEmbeddables,
     // NOTE as long as we're using the Scene hack, we need to ensure
     // we pass the original, uncloned elements when serializing
     // so that we keep ids stable. Hence adding the serializeAsJSON helper

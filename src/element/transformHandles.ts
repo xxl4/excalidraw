@@ -6,9 +6,9 @@ import {
 
 import { getElementAbsoluteCoords } from "./bounds";
 import { rotate } from "../math";
-import { AppState, Zoom } from "../types";
+import { InteractiveCanvasAppState, Zoom } from "../types";
 import { isTextElement } from ".";
-import { isLinearElement } from "./typeChecks";
+import { isFrameElement, isLinearElement } from "./typeChecks";
 import { DEFAULT_SPACING } from "../renderer/renderScene";
 
 export type TransformHandleDirection =
@@ -42,6 +42,14 @@ export const OMIT_SIDES_FOR_MULTIPLE_ELEMENTS = {
   s: true,
   n: true,
   w: true,
+};
+
+export const OMIT_SIDES_FOR_FRAME = {
+  e: true,
+  s: true,
+  n: true,
+  w: true,
+  rotation: true,
 };
 
 const OMIT_SIDES_FOR_TEXT_ELEMENT = {
@@ -249,6 +257,10 @@ export const getTransformHandles = (
     }
   } else if (isTextElement(element)) {
     omitSides = OMIT_SIDES_FOR_TEXT_ELEMENT;
+  } else if (isFrameElement(element)) {
+    omitSides = {
+      rotation: true,
+    };
   }
   const dashedLineMargin = isLinearElement(element)
     ? DEFAULT_SPACING + 8
@@ -264,8 +276,8 @@ export const getTransformHandles = (
 };
 
 export const shouldShowBoundingBox = (
-  elements: NonDeletedExcalidrawElement[],
-  appState: AppState,
+  elements: readonly NonDeletedExcalidrawElement[],
+  appState: InteractiveCanvasAppState,
 ) => {
   if (appState.editingLinearElement) {
     return false;

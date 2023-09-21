@@ -1,10 +1,10 @@
 const path = require("path");
+const webpack = require("webpack");
+const autoprefixer = require("autoprefixer");
+const { parseEnvVariables } = require("./env");
 const TerserPlugin = require("terser-webpack-plugin");
 const BundleAnalyzerPlugin =
   require("webpack-bundle-analyzer").BundleAnalyzerPlugin;
-const autoprefixer = require("autoprefixer");
-const webpack = require("webpack");
-const { parseEnvVariables } = require("./env");
 
 module.exports = {
   mode: "production",
@@ -46,8 +46,12 @@ module.exports = {
       },
       {
         test: /\.(ts|tsx|js|jsx|mjs)$/,
-        exclude: /node_modules\/(?!browser-fs-access)/,
+        exclude:
+          /node_modules[\\/](?!(browser-fs-access|canvas-roundrect-polyfill))/,
         use: [
+          {
+            loader: "import-meta-loader",
+          },
           {
             loader: "ts-loader",
             options: {

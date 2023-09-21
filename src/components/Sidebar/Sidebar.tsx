@@ -6,7 +6,6 @@ import React, {
   forwardRef,
   useImperativeHandle,
   useCallback,
-  RefObject,
 } from "react";
 import { Island } from ".././Island";
 import { atom, useSetAtom } from "jotai";
@@ -18,11 +17,7 @@ import {
 } from "./common";
 import { SidebarHeader } from "./SidebarHeader";
 import clsx from "clsx";
-import {
-  useDevice,
-  useExcalidrawAppState,
-  useExcalidrawSetAppState,
-} from "../App";
+import { useDevice, useExcalidrawSetAppState } from "../App";
 import { updateObject } from "../../utils";
 import { KEYS } from "../../keys";
 import { EVENT } from "../../constants";
@@ -31,37 +26,10 @@ import { SidebarTabTriggers } from "./SidebarTabTriggers";
 import { SidebarTabTrigger } from "./SidebarTabTrigger";
 import { SidebarTabs } from "./SidebarTabs";
 import { SidebarTab } from "./SidebarTab";
+import { useUIAppState } from "../../context/ui-appState";
+import { useOutsideClick } from "../../hooks/useOutsideClick";
 
 import "./Sidebar.scss";
-
-// FIXME replace this with the implem from ColorPicker once it's merged
-const useOnClickOutside = (
-  ref: RefObject<HTMLElement>,
-  cb: (event: MouseEvent) => void,
-) => {
-  useEffect(() => {
-    const listener = (event: MouseEvent) => {
-      if (!ref.current) {
-        return;
-      }
-
-      if (
-        event.target instanceof Element &&
-        (ref.current.contains(event.target) ||
-          !document.body.contains(event.target))
-      ) {
-        return;
-      }
-
-      cb(event);
-    };
-    document.addEventListener("pointerdown", listener, false);
-
-    return () => {
-      document.removeEventListener("pointerdown", listener);
-    };
-  }, [ref, cb]);
-};
 
 /**
  * Flags whether the currently rendered Sidebar is docked or not, for use
@@ -85,7 +53,7 @@ export const SidebarInner = forwardRef(
     }: SidebarProps & Omit<React.RefAttributes<HTMLDivElement>, "onSelect">,
     ref: React.ForwardedRef<HTMLDivElement>,
   ) => {
-    if (process.env.NODE_ENV === "development" && onDock && docked == null) {
+    if (import.meta.env.DEV && onDock && docked == null) {
       console.warn(
         "Sidebar: `docked` must be set when `onDock` is supplied for the sidebar to be user-dockable. To hide this message, either pass `docked` or remove `onDock`",
       );
@@ -136,7 +104,7 @@ export const SidebarInner = forwardRef(
       setAppState({ openSidebar: null });
     }, [setAppState]);
 
-    useOnClickOutside(
+    useOutsideClick(
       islandRef,
       useCallback(
         (event) => {
@@ -185,7 +153,7 @@ SidebarInner.displayName = "SidebarInner";
 
 export const Sidebar = Object.assign(
   forwardRef((props: SidebarProps, ref: React.ForwardedRef<HTMLDivElement>) => {
-    const appState = useExcalidrawAppState();
+    const appState = useUIAppState();
 
     const { onStateChange } = props;
 

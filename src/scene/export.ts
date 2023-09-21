@@ -1,8 +1,8 @@
 import rough from "roughjs/bin/rough";
 import { NonDeletedExcalidrawElement, Theme } from "../element/types";
-import { getCommonBounds } from "../element/bounds";
-import { renderScene, renderSceneToSvg } from "../renderer/renderScene";
-import { distance } from "../utils";
+import { getCommonBounds, getElementAbsoluteCoords } from "../element/bounds";
+import { renderStaticScene, renderSceneToSvg } from "../renderer/renderScene";
+import { distance, isOnlyExportingSingleFrame } from "../utils";
 import { AppState, BinaryFiles } from "../types";
 import {
   DEFAULT_BACKGROUND_COLOR,
@@ -19,6 +19,7 @@ import {
   updateImageCache,
 } from "../element/image";
 import { restoreAppState } from "../data/restore";
+import Scene from "./Scene";
 
 export const SVG_EXPORT_TAG = `<!-- svg-source:excalidraw -->`;
 
@@ -417,13 +418,28 @@ export const exportToCanvas = async ({
     files: files || {},
   });
 
+  const onlyExportingSingleFrame = isOnlyExportingSingleFrame(elements);
+
   // console.log(elements, width, height, cfg, canvasScale);
 
-  renderScene({
+  renderStaticScene({
     elements,
-    appState: { ...appState, width, height, offsetLeft: 0, offsetTop: 0 },
+    visibleElements: elements,
+    appState: {
+      ...appState,
+      width,
+      height,
+      offsetLeft: 0,
+      offsetTop: 0,
+      scrollX: -x + (onlyExportingSingleFrame ? 0 : normalizedPadding),
+      scrollY: -y + (onlyExportingSingleFrame ? 0 : normalizedPadding),
+      zoom: { value: DEFAULT_ZOOM_VALUE },
+      shouldCacheIgnoreZoom: false,
+      theme: cfg.theme || THEME.LIGHT,
+    },
     rc: rough.canvas(canvas),
     canvas,
+    scale: canvasScale,
     renderConfig: {
       canvasBackgroundColor:
         cfg.canvasBackgroundColor === false
@@ -432,19 +448,8 @@ export const exportToCanvas = async ({
           : cfg.canvasBackgroundColor ||
             appState.viewBackgroundColor ||
             DEFAULT_BACKGROUND_COLOR,
-      scrollX: -x + normalizedPadding,
-      scrollY: -y + normalizedPadding,
-      canvasScale,
-      zoom: { value: DEFAULT_ZOOM_VALUE },
-      remotePointerViewportCoords: {},
-      remoteSelectedElementIds: {},
-      shouldCacheIgnoreZoom: false,
-      remotePointerUsernames: {},
-      remotePointerUserStates: {},
-      theme: cfg.theme || THEME.LIGHT,
+
       imageCache,
-      renderScrollbars: false,
-      renderSelection: false,
       renderGrid: false,
       isExporting: true,
     },
@@ -462,10 +467,12 @@ export const exportToSvg = async (
     viewBackgroundColor: string;
     exportWithDarkMode?: boolean;
     exportEmbedScene?: boolean;
+    renderFrame?: boolean;
   },
   files: BinaryFiles | null,
   opts?: {
     serializeAsJSON?: () => string;
+    renderEmbeddables?: boolean;
   },
 ): Promise<SVGSVGElement> => {
   const {
@@ -502,18 +509,52 @@ export const exportToSvg = async (
   }
 
   let assetPath = "https://excalidraw.com/";
-
   // Asset path needs to be determined only when using package
-  if (process.env.IS_EXCALIDRAW_NPM_PACKAGE) {
+  if (import.meta.env.VITE_IS_EXCALIDRAW_NPM_PACKAGE) {
     assetPath =
       window.EXCALIDRAW_ASSET_PATH ||
-      `https://unpkg.com/${process.env.PKG_NAME}@${process.env.PKG_VERSION}`;
+      `https://unpkg.com/${import.meta.env.VITE_PKG_NAME}@${
+        import.meta.env.PKG_VERSION
+      }`;
 
     if (assetPath?.startsWith("/")) {
       assetPath = assetPath.replace("/", `${window.location.origin}/`);
     }
     assetPath = `${assetPath}/dist/excalidraw-assets/`;
   }
+
+  // do not apply clipping when we're exporting the whole scene
+  const isExportingWholeCanvas =
+    Scene.getScene(elements[0])?.getNonDeletedElements()?.length ===
+    elements.length;
+
+  const onlyExportingSingleFrame = isOnlyExportingSingleFrame(elements);
+
+  const offsetX = -minX + (onlyExportingSingleFrame ? 0 : exportPadding);
+  const offsetY = -minY + (onlyExportingSingleFrame ? 0 : exportPadding);
+
+  const exportingFrame =
+    isExportingWholeCanvas || !onlyExportingSingleFrame
+      ? undefined
+      : elements.find((element) => element.type === "frame");
+
+  let exportingFrameClipPath = "";
+  if (exportingFrame) {
+    const [x1, y1, x2, y2] = getElementAbsoluteCoords(exportingFrame);
+    const cx = (x2 - x1) / 2 - (exportingFrame.x - x1);
+    const cy = (y2 - y1) / 2 - (exportingFrame.y - y1);
+
+    exportingFrameClipPath = `<clipPath id=${exportingFrame.id}>
+            <rect transform="translate(${exportingFrame.x + offsetX} ${
+      exportingFrame.y + offsetY
+    }) rotate(${exportingFrame.angle} ${cx} ${cy})"
+          width="${exportingFrame.width}"
+          height="${exportingFrame.height}"
+          >
+          </rect>
+        </clipPath>`;
+  }
+
   svgRoot.innerHTML = `
   ${SVG_EXPORT_TAG}
   ${metadata}
@@ -528,8 +569,10 @@ export const exportToSvg = async (
         src: url("${assetPath}Cascadia.woff2");
       }
     </style>
+    ${exportingFrameClipPath}
   </defs>
   `;
+
   // render background rect
   if (appState.exportBackground && viewBackgroundColor) {
     const rect = svgRoot.ownerDocument!.createElementNS(SVG_NS, "rect");
@@ -543,9 +586,11 @@ export const exportToSvg = async (
 
   const rsvg = rough.svg(svgRoot);
   renderSceneToSvg(elements, rsvg, svgRoot, files || {}, {
-    offsetX: -minX + exportPadding,
-    offsetY: -minY + exportPadding,
+    offsetX,
+    offsetY,
     exportWithDarkMode: appState.exportWithDarkMode,
+    exportingFrameId: exportingFrame?.id || null,
+    renderEmbeddables: opts?.renderEmbeddables,
   });
 
   return svgRoot;
@@ -555,6 +600,31 @@ export const exportToSvg = async (
 export const getCanvasSize = (
   elements: readonly NonDeletedExcalidrawElement[],
 ): [minX: number, minY: number, width: number, height: number] => {
+  // we should decide if we are exporting the whole canvas
+  // if so, we are not clipping elements in the frame
+  // and therefore, we should not do anything special
+
+  const isExportingWholeCanvas =
+    Scene.getScene(elements[0])?.getNonDeletedElements()?.length ===
+    elements.length;
+
+  const onlyExportingSingleFrame = isOnlyExportingSingleFrame(elements);
+
+  if (!isExportingWholeCanvas || onlyExportingSingleFrame) {
+    const frames = elements.filter((element) => element.type === "frame");
+
+    const exportedFrameIds = frames.reduce((acc, frame) => {
+      acc[frame.id] = true;
+      return acc;
+    }, {} as Record<string, true>);
+
+    // elements in a frame do not affect the canvas size if we're not exporting
+    // the whole canvas
+    elements = elements.filter(
+      (element) => !exportedFrameIds[element.frameId ?? ""],
+    );
+  }
+
   const [minX, minY, maxX, maxY] = getCommonBounds(elements);
   const width = distance(minX, maxX);
   const height = distance(minY, maxY);

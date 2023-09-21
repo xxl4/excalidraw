@@ -26,7 +26,7 @@ export const actionChangeProjectName = register({
   perform: (_elements, appState, value) => {
     return { appState: { ...appState, name: value }, commitToHistory: false };
   },
-  PanelComponent: ({ appState, updateData, appProps }) => (
+  PanelComponent: ({ appState, updateData, appProps, data }) => (
     <ProjectName
       label={t("labels.fileTitle")}
       value={appState.name || "Unnamed"}
@@ -34,6 +34,7 @@ export const actionChangeProjectName = register({
       isNameEditable={
         typeof appProps.name === "undefined" && !appState.viewModeEnabled
       }
+      ignoreFocus={data?.ignoreFocus ?? false}
     />
   ),
 });
@@ -76,7 +77,7 @@ export const actionChangeExportScale = register({
           );
 
           const scaleButtonTitle = `${t(
-            "buttons.scale",
+            "imageExportDialog.label.scale",
           )} ${s}x (${width}x${height})`;
 
           return (
@@ -113,7 +114,7 @@ export const actionChangeExportBackground = register({
       checked={appState.exportBackground}
       onChange={(checked) => updateData(checked)}
     >
-      {t("labels.withBackground")}
+      {t("imageExportDialog.label.withBackground")}
     </CheckboxItem>
   ),
 });
@@ -132,8 +133,8 @@ export const actionChangeExportEmbedScene = register({
       checked={appState.exportEmbedScene}
       onChange={(checked) => updateData(checked)}
     >
-      {t("labels.exportEmbedScene")}
-      <Tooltip label={t("labels.exportEmbedScene_details")} long={true}>
+      {t("imageExportDialog.label.embedScene")}
+      <Tooltip label={t("imageExportDialog.tooltip.embedScene")} long={true}>
         <div className="excalidraw-tooltip-icon">{questionCircle}</div>
       </Tooltip>
     </CheckboxItem>
@@ -288,7 +289,7 @@ export const actionExportWithDarkMode = register({
         onChange={(theme: Theme) => {
           updateData(theme === THEME.DARK);
         }}
-        title={t("labels.toggleExportColorScheme")}
+        title={t("imageExportDialog.label.darkMode")}
       />
     </div>
   ),

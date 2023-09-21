@@ -10,9 +10,9 @@ import {
   ExcalidrawLinearElement,
   NonDeleted,
 } from "./element/types";
-import { getShapeForElement } from "./renderer/renderElement";
 import { getCurvePathOps } from "./element/bounds";
 import { Mutable } from "./utility-types";
+import { ShapeCache } from "./scene/ShapeCache";
 
 export const rotate = (
   x1: number,
@@ -206,7 +206,7 @@ export const isPointInPolygon = (
 
 // Returns whether `q` lies inside the segment/rectangle defined by `p` and `r`.
 // This is an approximation to "does `q` lie on a segment `pr`" check.
-const isPointWithinBounds = (p: Point, q: Point, r: Point) => {
+export const isPointWithinBounds = (p: Point, q: Point, r: Point) => {
   return (
     q[0] <= Math.max(p[0], r[0]) &&
     q[0] >= Math.min(p[0], r[0]) &&
@@ -303,7 +303,7 @@ export const getControlPointsForBezierCurve = (
   element: NonDeleted<ExcalidrawLinearElement>,
   endPoint: Point,
 ) => {
-  const shape = getShapeForElement(element as ExcalidrawLinearElement);
+  const shape = ShapeCache.generateElementShape(element);
   if (!shape) {
     return null;
   }

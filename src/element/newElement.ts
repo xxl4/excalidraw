@@ -12,6 +12,8 @@ import {
   ExcalidrawFreeDrawElement,
   FontFamilyValues,
   ExcalidrawTextContainer,
+  ExcalidrawFrameElement,
+  ExcalidrawEmbeddableElement,
 } from "../element/types";
 import {
   arrayToMap,
@@ -20,15 +22,13 @@ import {
   isTestEnv,
 } from "../utils";
 import { randomInteger, randomId } from "../random";
-import { bumpVersion, mutateElement, newElementWith } from "./mutateElement";
+import { bumpVersion, newElementWith } from "./mutateElement";
 import { getNewGroupIdsForDuplication } from "../groups";
 import { AppState } from "../types";
 import { getElementAbsoluteCoords } from ".";
 import { adjustXYWithRotation } from "../math";
 import { getResizedElementAbsoluteCoords } from "./bounds";
 import {
-  getBoundTextElementOffset,
-  getContainerDims,
   getContainerElement,
   measureText,
   normalizeText,
@@ -44,15 +44,15 @@ import {
   DEFAULT_VERTICAL_ALIGN,
   VERTICAL_ALIGN,
 } from "../constants";
-import { isArrowElement } from "./typeChecks";
 import { MarkOptional, Merge, Mutable } from "../utility-types";
 
-type ElementConstructorOpts = MarkOptional<
+export type ElementConstructorOpts = MarkOptional<
   Omit<ExcalidrawGenericElement, "id" | "type" | "isDeleted" | "updated">,
   | "width"
   | "height"
   | "angle"
   | "groupIds"
+  | "frameId"
   | "boundElements"
   | "seed"
   | "version"
@@ -85,6 +85,7 @@ const _newElementBase = <T extends ExcalidrawElement>(
     height = 0,
     angle = 0,
     groupIds = [],
+    frameId = null,
     roundness = null,
     boundElements = null,
     link = null,
@@ -109,6 +110,7 @@ const _newElementBase = <T extends ExcalidrawElement>(
     roughness,
     opacity,
     groupIds,
+    frameId,
     roundness,
     seed: rest.seed ?? randomInteger(),
     version: rest.version || 1,
@@ -128,6 +130,33 @@ export const newElement = (
   } & ElementConstructorOpts,
 ): NonDeleted<ExcalidrawGenericElement> =>
   _newElementBase<ExcalidrawGenericElement>(opts.type, opts);
+
+export const newEmbeddableElement = (
+  opts: {
+    type: "embeddable";
+    validated: ExcalidrawEmbeddableElement["validated"];
+  } & ElementConstructorOpts,
+): NonDeleted<ExcalidrawEmbeddableElement> => {
+  return {
+    ..._newElementBase<ExcalidrawEmbeddableElement>("embeddable", opts),
+    validated: opts.validated,
+  };
+};
+
+export const newFrameElement = (
+  opts: ElementConstructorOpts,
+): NonDeleted<ExcalidrawFrameElement> => {
+  const frameElement = newElementWith(
+    {
+      ..._newElementBase<ExcalidrawFrameElement>("frame", opts),
+      type: "frame",
+      name: null,
+    },
+    {},
+  );
+
+  return frameElement;
+};
 
 /** computes element x/y offset based on textAlign/verticalAlign */
 const getTextElementPositionOffsets = (
@@ -158,7 +187,7 @@ export const newTextElement = (
     fontFamily?: FontFamilyValues;
     textAlign?: TextAlign;
     verticalAlign?: VerticalAlign;
-    containerId?: ExcalidrawTextContainer["id"];
+    containerId?: ExcalidrawTextContainer["id"] | null;
     lineHeight?: ExcalidrawTextElement["lineHeight"];
     strokeWidth?: ExcalidrawTextElement["strokeWidth"];
   } & ElementConstructorOpts,
@@ -211,8 +240,6 @@ const getAdjustedDimensions = (
   height: number;
   baseline: number;
 } => {
-  const container = getContainerElement(element);
-
   const {
     width: nextWidth,
     height: nextHeight,
@@ -268,27 +295,6 @@ const getAdjustedDimensions = (
     );
   }
 
-  // make sure container dimensions are set properly when
-  // text editor overflows beyond viewport dimensions
-  if (container) {
-    const boundTextElementPadding = getBoundTextElementOffset(element);
-
-    const containerDims = getContainerDims(container);
-    let height = containerDims.height;
-    let width = containerDims.width;
-    if (nextHeight > height - boundTextElementPadding * 2) {
-      height = nextHeight + boundTextElementPadding * 2;
-    }
-    if (nextWidth > width - boundTextElementPadding * 2) {
-      width = nextWidth + boundTextElementPadding * 2;
-    }
-    if (
-      !isArrowElement(container) &&
-      (height !== containerDims.height || width !== containerDims.width)
-    ) {
-      mutateElement(container, { height, width });
-    }
-  }
   return {
     width: nextWidth,
     height: nextHeight,
@@ -355,8 +361,8 @@ export const newFreeDrawElement = (
 export const newLinearElement = (
   opts: {
     type: ExcalidrawLinearElement["type"];
-    startArrowhead: Arrowhead | null;
-    endArrowhead: Arrowhead | null;
+    startArrowhead?: Arrowhead | null;
+    endArrowhead?: Arrowhead | null;
     points?: ExcalidrawLinearElement["points"];
   } & ElementConstructorOpts,
 ): NonDeleted<ExcalidrawLinearElement> => {
@@ -366,8 +372,8 @@ export const newLinearElement = (
     lastCommittedPoint: null,
     startBinding: null,
     endBinding: null,
-    startArrowhead: opts.startArrowhead,
-    endArrowhead: opts.endArrowhead,
+    startArrowhead: opts.startArrowhead || null,
+    endArrowhead: opts.endArrowhead || null,
   };
 };
 
@@ -437,7 +443,7 @@ const _deepCopyElement = (val: any, depth: number = 0) => {
   // we're not cloning non-array & non-plain-object objects because we
   // don't support them on excalidraw elements yet. If we do, we need to make
   // sure we start cloning them, so let's warn about it.
-  if (process.env.NODE_ENV === "development") {
+  if (import.meta.env.DEV) {
     if (
       objectType !== "[object Object]" &&
       objectType !== "[object Array]" &&
@@ -471,7 +477,7 @@ export const deepCopyElement = <T extends ExcalidrawElement>(
  * utility wrapper to generate new id. In test env it reuses the old + postfix
  * for test assertions.
  */
-const regenerateId = (
+export const regenerateId = (
   /** supply null if no previous id exists */
   previousId: string | null,
 ) => {
@@ -636,6 +642,10 @@ export const duplicateElements = (
             elementId: newEndBindingId,
           }
         : null;
+    }
+
+    if (clonedElement.frameId) {
+      clonedElement.frameId = maybeGetNewId(clonedElement.frameId);
     }
 
     clonedElements.push(clonedElement);
