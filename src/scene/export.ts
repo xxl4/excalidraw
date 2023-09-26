@@ -395,6 +395,13 @@ export const exportToCanvas = async ({
     ? cfg.createCanvas()
     : document.createElement("canvas");
 
+  const onlyExportingSingleFrame = isOnlyExportingSingleFrame(elements);
+
+  // hack fix until we decide whose responsibility this should be
+  if (onlyExportingSingleFrame) {
+    cfg.padding = 0;
+  }
+
   // rescale padding based on current canvasScale factor so that the resulting
   // padding is kept the same as supplied by user (with the exception of
   // `cfg.scale` being set, which also scales the padding)
@@ -418,8 +425,6 @@ export const exportToCanvas = async ({
     files: files || {},
   });
 
-  const onlyExportingSingleFrame = isOnlyExportingSingleFrame(elements);
-
   // console.log(elements, width, height, cfg, canvasScale);
 
   renderStaticScene({
@@ -431,8 +436,8 @@ export const exportToCanvas = async ({
       height,
       offsetLeft: 0,
       offsetTop: 0,
-      scrollX: -x + (onlyExportingSingleFrame ? 0 : normalizedPadding),
-      scrollY: -y + (onlyExportingSingleFrame ? 0 : normalizedPadding),
+      scrollX: -x + normalizedPadding,
+      scrollY: -y + normalizedPadding,
       zoom: { value: DEFAULT_ZOOM_VALUE },
       shouldCacheIgnoreZoom: false,
       theme: cfg.theme || THEME.LIGHT,
@@ -495,7 +500,10 @@ export const exportToSvg = async (
       console.error(error);
     }
   }
-  const [minX, minY, width, height] = getCanvasSize(elements);
+  let [minX, minY, width, height] = getCanvasSize(elements);
+
+  width += exportPadding * 2;
+  height += exportPadding * 2;
 
   // initialize SVG root
   const svgRoot = document.createElementNS(SVG_NS, "svg");
