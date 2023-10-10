@@ -3,6 +3,7 @@ import { LaserPointer } from "@excalidraw/laser-pointer";
 import { sceneCoordsToViewportCoords } from "../../utils";
 import App from "../App";
 import { getClientColor } from "../../clients";
+import { DEFAULT_LASER_COLOR } from "../../constants";
 
 // decay time in milliseconds
 const DECAY_TIME = 1000;
@@ -259,6 +260,8 @@ export class LaserPathManager {
         continue;
       }
 
+      const collaborator = this.app.state.collaborators.get(key)!;
+
       state.finishedPaths = state.finishedPaths.filter((path) => {
         const lastPoint = path.originalPoints[path.originalPoints.length - 1];
 
@@ -276,7 +279,10 @@ export class LaserPathManager {
       }
 
       state.svg.setAttribute("d", paths);
-      state.svg.setAttribute("fill", getClientColor(key));
+      state.svg.setAttribute(
+        "fill",
+        collaborator.pointer?.laserColor || getClientColor(key),
+      );
     }
 
     this.ownState.finishedPaths = this.ownState.finishedPaths.filter((path) => {
@@ -300,7 +306,7 @@ export class LaserPathManager {
     }
 
     this.ownState.svg.setAttribute("d", paths);
-    this.ownState.svg.setAttribute("fill", "red");
+    this.ownState.svg.setAttribute("fill", DEFAULT_LASER_COLOR);
 
     if (!somePathsExist) {
       this.isDrawing = false;
