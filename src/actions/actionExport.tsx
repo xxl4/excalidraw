@@ -203,7 +203,15 @@ export const actionSaveFileToDisk = register({
         },
         app.files,
       );
-      return { commitToHistory: false, appState: { ...appState, fileHandle } };
+      return {
+        commitToHistory: false,
+        appState: {
+          ...appState,
+          openDialog: null,
+          fileHandle,
+          toast: { message: t("toast.fileSaved") },
+        },
+      };
     } catch (error: any) {
       if (error?.name !== "AbortError") {
         console.error(error);
@@ -221,7 +229,7 @@ export const actionSaveFileToDisk = register({
       icon={saveAs}
       title={t("buttons.saveAs")}
       aria-label={t("buttons.saveAs")}
-      showAriaLabel={useDevice().isMobile}
+      showAriaLabel={useDevice().editor.isMobile}
       hidden={!nativeFileSystemSupported}
       onClick={() => updateData(null)}
       data-testid="save-as-button"

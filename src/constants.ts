@@ -106,6 +106,7 @@ export const FONT_FAMILY = {
   Virgil: 1,
   Helvetica: 2,
   Cascadia: 3,
+  Assistant: 4,
 };
 
 export const THEME = {
@@ -115,13 +116,18 @@ export const THEME = {
 
 export const FRAME_STYLE = {
   strokeColor: "#bbb" as ExcalidrawElement["strokeColor"],
-  strokeWidth: 1 as ExcalidrawElement["strokeWidth"],
+  strokeWidth: 2 as ExcalidrawElement["strokeWidth"],
   strokeStyle: "solid" as ExcalidrawElement["strokeStyle"],
   fillStyle: "solid" as ExcalidrawElement["fillStyle"],
   roughness: 0 as ExcalidrawElement["roughness"],
   roundness: null as ExcalidrawElement["roundness"],
   backgroundColor: "transparent" as ExcalidrawElement["backgroundColor"],
   radius: 8,
+  nameOffsetY: 3,
+  nameColorLightTheme: "#999999",
+  nameColorDarkTheme: "#7a7a7a",
+  nameFontSize: 14,
+  nameLineHeight: 1.25,
 };
 
 export const WINDOWS_EMOJI_FALLBACK_FONT = "Segoe UI Emoji";
@@ -151,6 +157,8 @@ export const IMAGE_MIME_TYPES = {
   avif: "image/avif",
   jfif: "image/jfif",
 } as const;
+
+export const ALLOWED_PASTE_MIME_TYPES = ["text/plain", "text/html"] as const;
 
 export const MIME_TYPES = {
   json: "application/json",
@@ -222,8 +230,6 @@ export const DEFAULT_UI_OPTIONS: AppProps["UIOptions"] = {
 
 // breakpoints
 // -----------------------------------------------------------------------------
-// sm screen
-export const MQ_SM_MAX_WIDTH = 640;
 // md screen
 export const MQ_MAX_WIDTH_PORTRAIT = 730;
 export const MQ_MAX_WIDTH_LANDSCAPE = 1000;
@@ -300,6 +306,18 @@ export const ROUNDNESS = {
  * collaboration */
 export const PRECEDING_ELEMENT_KEY = "__precedingElement__";
 
+export const ROUGHNESS = {
+  architect: 0,
+  artist: 1,
+  cartoonist: 2,
+} as const;
+
+export const STROKE_WIDTH = {
+  thin: 1,
+  bold: 2,
+  extraBold: 4,
+} as const;
+
 export const DEFAULT_ELEMENT_PROPS: {
   strokeColor: ExcalidrawElement["strokeColor"];
   backgroundColor: ExcalidrawElement["backgroundColor"];
@@ -312,10 +330,10 @@ export const DEFAULT_ELEMENT_PROPS: {
 } = {
   strokeColor: COLOR_PALETTE.black,
   backgroundColor: COLOR_PALETTE.transparent,
-  fillStyle: "hachure",
-  strokeWidth: 1,
+  fillStyle: "solid",
+  strokeWidth: 2,
   strokeStyle: "solid",
-  roughness: 1,
+  roughness: ROUGHNESS.artist,
   opacity: 100,
   locked: false,
 };

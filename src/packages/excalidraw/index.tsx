@@ -254,3 +254,10 @@ export { exportToCanvas } from "../../scene/export";
 
 export { normalizeLink } from "../../data/url";
 export { convertToExcalidrawElements } from "../../data/transform";
+export { getCommonBounds } from "../../element/bounds";
+
+export {
+  elementsOverlappingBBox,
+  isElementInsideBBox,
+  elementPartiallyOverlapsWithOrContainsBBox,
+} from "../withinBounds";

@@ -1,27 +1,149 @@
 import rough from "roughjs/bin/rough";
-import { NonDeletedExcalidrawElement, Theme } from "../element/types";
-import { getCommonBounds, getElementAbsoluteCoords } from "../element/bounds";
+import {
+  ExcalidrawElement,
+  ExcalidrawFrameElement,
+  ExcalidrawTextElement,
+  NonDeletedExcalidrawElement,
+  Theme,
+} from "../element/types";
+import {
+  Bounds,
+  getCommonBounds,
+  getElementAbsoluteCoords,
+} from "../element/bounds";
 import { renderStaticScene, renderSceneToSvg } from "../renderer/renderScene";
-import { distance, isOnlyExportingSingleFrame } from "../utils";
+import { distance, getFontString, isOnlyExportingSingleFrame } from "../utils";
 import { AppState, BinaryFiles } from "../types";
 import {
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_EXPORT_PADDING,
   DEFAULT_ZOOM_VALUE,
+  FRAME_STYLE,
   ENV,
   SVG_NS,
   THEME,
   THEME_FILTER,
 } from "../constants";
+import { getDefaultAppState } from "../appState";
 import { serializeAsJSON } from "../data/json";
 import {
   getInitializedImageElements,
   updateImageCache,
 } from "../element/image";
 import { restoreAppState } from "../data/restore";
+import { elementsOverlappingBBox } from "../packages/withinBounds";
+import { getFrameElements, getRootElements } from "../frame";
+import { isFrameElement, newTextElement } from "../element";
+import { Mutable } from "../utility-types";
+import { newElementWith } from "../element/mutateElement";
 import Scene from "./Scene";
 
-export const SVG_EXPORT_TAG = `<!-- svg-source:excalidraw -->`;
+const SVG_EXPORT_TAG = `<!-- svg-source:excalidraw -->`;
+
+// getContainerElement and getBoundTextElement and potentially other helpers
+// depend on `Scene` which will not be available when these pure utils are
+// called outside initialized Excalidraw editor instance or even if called
+// from inside Excalidraw if the elements were never cached by Scene (e.g.
+// for library elements).
+//
+// As such, before passing the elements down, we need to initialize a custom
+// Scene instance and assign them to it.
+//
+// FIXME This is a super hacky workaround and we'll need to rewrite this soon.
+const __createSceneForElementsHack__ = (
+  elements: readonly ExcalidrawElement[],
+) => {
+  const scene = new Scene();
+  // we can't duplicate elements to regenerate ids because we need the
+  // orig ids when embedding. So we do another hack of not mapping element
+  // ids to Scene instances so that we don't override the editor elements
+  // mapping
+  scene.replaceAllElements(elements, false);
+  return scene;
+};
+
+const truncateText = (element: ExcalidrawTextElement, maxWidth: number) => {
+  if (element.width <= maxWidth) {
+    return element;
+  }
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = getFontString({
+    fontFamily: element.fontFamily,
+    fontSize: element.fontSize,
+  });
+
+  let text = element.text;
+
+  const metrics = ctx.measureText(text);
+
+  if (metrics.width > maxWidth) {
+    // we iterate from the right, removing characters one by one instead
+    // of bulding the string up. This assumes that it's more likely
+    // your frame names will overflow by not that many characters
+    // (if ever), so it sohuld be faster this way.
+    for (let i = text.length; i > 0; i--) {
+      const newText = `${text.slice(0, i)}...`;
+      if (ctx.measureText(newText).width <= maxWidth) {
+        text = newText;
+        break;
+      }
+    }
+  }
+  return newElementWith(element, { text, width: maxWidth });
+};
+
+/**
+ * When exporting frames, we need to render frame labels which are currently
+ * being rendered in DOM when editing. Adding the labels as regular text
+ * elements seems like a simple hack. In the future we'll want to move to
+ * proper canvas rendering, even within editor (instead of DOM).
+ */
+const addFrameLabelsAsTextElements = (
+  elements: readonly NonDeletedExcalidrawElement[],
+  opts: Pick<AppState, "exportWithDarkMode">,
+) => {
+  const nextElements: NonDeletedExcalidrawElement[] = [];
+  let frameIdx = 0;
+  for (const element of elements) {
+    if (isFrameElement(element)) {
+      frameIdx++;
+      let textElement: Mutable<ExcalidrawTextElement> = newTextElement({
+        x: element.x,
+        y: element.y - FRAME_STYLE.nameOffsetY,
+        fontFamily: 4,
+        fontSize: FRAME_STYLE.nameFontSize,
+        lineHeight:
+          FRAME_STYLE.nameLineHeight as ExcalidrawTextElement["lineHeight"],
+        strokeColor: opts.exportWithDarkMode
+          ? FRAME_STYLE.nameColorDarkTheme
+          : FRAME_STYLE.nameColorLightTheme,
+        text: element.name || `Frame ${frameIdx}`,
+      });
+      textElement.y -= textElement.height;
+
+      textElement = truncateText(textElement, element.width);
+
+      nextElements.push(textElement);
+    }
+    nextElements.push(element);
+  }
+
+  return nextElements;
+};
+
+const getFrameRenderingConfig = (
+  exportingFrame: ExcalidrawFrameElement | null,
+  frameRendering: AppState["frameRendering"] | null,
+): AppState["frameRendering"] => {
+  frameRendering = frameRendering || getDefaultAppState().frameRendering;
+  return {
+    enabled: exportingFrame ? true : frameRendering.enabled,
+    outline: exportingFrame ? false : frameRendering.outline,
+    name: exportingFrame ? false : frameRendering.name,
+    clip: exportingFrame ? true : frameRendering.clip,
+  };
+};
 
 export type ExportToCanvasData = {
   elements: readonly NonDeletedExcalidrawElement[];
@@ -192,6 +314,8 @@ export type ExportToCanvasConfig = {
     width: number,
     height: number,
   ) => { width: number; height: number; scale?: number };
+
+  exportingFrame?: ExcalidrawFrameElement | null;
 };
 
 /**
@@ -205,14 +329,34 @@ export const exportToCanvas = async ({
   data: ExportToCanvasData;
   config?: ExportToCanvasConfig;
 }) => {
-  // initialize defaults
-  // ---------------------------------------------------------------------------
-  const { elements, files } = data;
-
-  const appState = restoreAppState(data.appState, null);
-
   // clone
   const cfg = Object.assign({}, config);
+
+  const { files } = data;
+  const { exportingFrame } = cfg;
+
+  const tempScene = __createSceneForElementsHack__(data.elements);
+  const elements = tempScene.getNonDeletedElements();
+
+  let nextElements: ExcalidrawElement[];
+
+  if (exportingFrame) {
+    cfg.padding = 0;
+    nextElements = elementsOverlappingBBox({
+      elements,
+      bounds: exportingFrame,
+      type: "overlap",
+    });
+  } else {
+    nextElements = addFrameLabelsAsTextElements(elements, {
+      exportWithDarkMode: cfg.theme === THEME.DARK,
+    });
+  }
+
+  // initialize defaults
+  // ---------------------------------------------------------------------------
+
+  const appState = restoreAppState(data.appState, null);
 
   cfg.fit =
     cfg.fit ??
@@ -268,7 +412,9 @@ export const exportToCanvas = async ({
   // scale the output further.
   let canvasScale = 1;
 
-  const origCanvasSize = getCanvasSize(elements);
+  const origCanvasSize = getCanvasSize(
+    exportingFrame ? [exportingFrame] : getRootElements(nextElements),
+  );
 
   // cfg.x = undefined;
   // cfg.y = undefined;
@@ -419,7 +565,7 @@ export const exportToCanvas = async ({
 
   const { imageCache } = await updateImageCache({
     imageCache: new Map(),
-    fileIds: getInitializedImageElements(elements).map(
+    fileIds: getInitializedImageElements(nextElements).map(
       (element) => element.fileId,
     ),
     files: files || {},
@@ -428,10 +574,16 @@ export const exportToCanvas = async ({
   // console.log(elements, width, height, cfg, canvasScale);
 
   renderStaticScene({
-    elements,
-    visibleElements: elements,
+    canvas,
+    rc: rough.canvas(canvas),
+    elements: nextElements,
+    visibleElements: nextElements,
     appState: {
       ...appState,
+      frameRendering: getFrameRenderingConfig(
+        exportingFrame ?? null,
+        appState.frameRendering ?? null,
+      ),
       width,
       height,
       offsetLeft: 0,
@@ -439,11 +591,10 @@ export const exportToCanvas = async ({
       scrollX: -x + normalizedPadding,
       scrollY: -y + normalizedPadding,
       zoom: { value: DEFAULT_ZOOM_VALUE },
+
       shouldCacheIgnoreZoom: false,
       theme: cfg.theme || THEME.LIGHT,
     },
-    rc: rough.canvas(canvas),
-    canvas,
     scale: canvasScale,
     renderConfig: {
       canvasBackgroundColor:
@@ -460,6 +611,8 @@ export const exportToCanvas = async ({
     },
   });
 
+  tempScene.destroy();
+
   return canvas;
 };
 
@@ -472,35 +625,64 @@ export const exportToSvg = async (
     viewBackgroundColor: string;
     exportWithDarkMode?: boolean;
     exportEmbedScene?: boolean;
-    renderFrame?: boolean;
+    frameRendering?: AppState["frameRendering"];
   },
   files: BinaryFiles | null,
   opts?: {
-    serializeAsJSON?: () => string;
     renderEmbeddables?: boolean;
+    exportingFrame?: ExcalidrawFrameElement | null;
   },
 ): Promise<SVGSVGElement> => {
-  const {
+  const tempScene = __createSceneForElementsHack__(elements);
+  elements = tempScene.getNonDeletedElements();
+
+  let {
     exportPadding = DEFAULT_EXPORT_PADDING,
     viewBackgroundColor,
     exportScale = 1,
     exportEmbedScene,
   } = appState;
+
+  const { exportingFrame = null } = opts || {};
+
+  let nextElements: ExcalidrawElement[] = [];
+
+  if (exportingFrame) {
+    exportPadding = 0;
+    nextElements = elementsOverlappingBBox({
+      elements,
+      bounds: exportingFrame,
+      type: "overlap",
+    });
+  } else {
+    nextElements = addFrameLabelsAsTextElements(elements, {
+      exportWithDarkMode: appState.exportWithDarkMode ?? false,
+    });
+  }
+
   let metadata = "";
+
+  // we need to serialize the "original" elements before we put them through
+  // the tempScene hack which duplicates and regenerates ids
   if (exportEmbedScene) {
     try {
       metadata = await (
         await import(/* webpackChunkName: "image" */ "../../src/data/image")
       ).encodeSvgMetadata({
-        text: opts?.serializeAsJSON
-          ? opts?.serializeAsJSON?.()
-          : serializeAsJSON(elements, appState, files || {}, "local"),
+        // when embedding scene, we want to embed the origionally supplied
+        // elements which don't contain the temp frame labels.
+        // But it also requires that the exportToSvg is being supplied with
+        // only the elements that we're exporting, and no extra.
+        text: serializeAsJSON(elements, appState, files || {}, "local"),
       });
     } catch (error: any) {
       console.error(error);
     }
   }
-  let [minX, minY, width, height] = getCanvasSize(elements);
+
+  let [minX, minY, width, height] = getCanvasSize(
+    exportingFrame ? [exportingFrame] : getRootElements(nextElements),
+  );
 
   width += exportPadding * 2;
   height += exportPadding * 2;
@@ -531,33 +713,23 @@ export const exportToSvg = async (
     assetPath = `${assetPath}/dist/excalidraw-assets/`;
   }
 
-  // do not apply clipping when we're exporting the whole scene
-  const isExportingWholeCanvas =
-    Scene.getScene(elements[0])?.getNonDeletedElements()?.length ===
-    elements.length;
+  const offsetX = -minX + exportPadding;
+  const offsetY = -minY + exportPadding;
 
-  const onlyExportingSingleFrame = isOnlyExportingSingleFrame(elements);
-
-  const offsetX = -minX + (onlyExportingSingleFrame ? 0 : exportPadding);
-  const offsetY = -minY + (onlyExportingSingleFrame ? 0 : exportPadding);
-
-  const exportingFrame =
-    isExportingWholeCanvas || !onlyExportingSingleFrame
-      ? undefined
-      : elements.find((element) => element.type === "frame");
+  const frameElements = getFrameElements(elements);
 
   let exportingFrameClipPath = "";
-  if (exportingFrame) {
-    const [x1, y1, x2, y2] = getElementAbsoluteCoords(exportingFrame);
-    const cx = (x2 - x1) / 2 - (exportingFrame.x - x1);
-    const cy = (y2 - y1) / 2 - (exportingFrame.y - y1);
+  for (const frame of frameElements) {
+    const [x1, y1, x2, y2] = getElementAbsoluteCoords(frame);
+    const cx = (x2 - x1) / 2 - (frame.x - x1);
+    const cy = (y2 - y1) / 2 - (frame.y - y1);
 
-    exportingFrameClipPath = `<clipPath id=${exportingFrame.id}>
-            <rect transform="translate(${exportingFrame.x + offsetX} ${
-      exportingFrame.y + offsetY
-    }) rotate(${exportingFrame.angle} ${cx} ${cy})"
-          width="${exportingFrame.width}"
-          height="${exportingFrame.height}"
+    exportingFrameClipPath += `<clipPath id=${frame.id}>
+            <rect transform="translate(${frame.x + offsetX} ${
+      frame.y + offsetY
+    }) rotate(${frame.angle} ${cx} ${cy})"
+          width="${frame.width}"
+          height="${frame.height}"
           >
           </rect>
         </clipPath>`;
@@ -576,6 +748,10 @@ export const exportToSvg = async (
         font-family: "Cascadia";
         src: url("${assetPath}Cascadia.woff2");
       }
+      @font-face {
+        font-family: "Assistant";
+        src: url("${assetPath}Assistant-Regular.woff2");
+      }
     </style>
     ${exportingFrameClipPath}
   </defs>
@@ -593,13 +769,18 @@ export const exportToSvg = async (
   }
 
   const rsvg = rough.svg(svgRoot);
-  renderSceneToSvg(elements, rsvg, svgRoot, files || {}, {
+  renderSceneToSvg(nextElements, rsvg, svgRoot, files || {}, {
     offsetX,
     offsetY,
-    exportWithDarkMode: appState.exportWithDarkMode,
-    exportingFrameId: exportingFrame?.id || null,
-    renderEmbeddables: opts?.renderEmbeddables,
+    exportWithDarkMode: appState.exportWithDarkMode ?? false,
+    renderEmbeddables: opts?.renderEmbeddables ?? false,
+    frameRendering: getFrameRenderingConfig(
+      exportingFrame ?? null,
+      appState.frameRendering ?? null,
+    ),
   });
+
+  tempScene.destroy();
 
   return svgRoot;
 };
@@ -607,32 +788,7 @@ export const exportToSvg = async (
 // calculate smallest area to fit the contents in
 export const getCanvasSize = (
   elements: readonly NonDeletedExcalidrawElement[],
-): [minX: number, minY: number, width: number, height: number] => {
-  // we should decide if we are exporting the whole canvas
-  // if so, we are not clipping elements in the frame
-  // and therefore, we should not do anything special
-
-  const isExportingWholeCanvas =
-    Scene.getScene(elements[0])?.getNonDeletedElements()?.length ===
-    elements.length;
-
-  const onlyExportingSingleFrame = isOnlyExportingSingleFrame(elements);
-
-  if (!isExportingWholeCanvas || onlyExportingSingleFrame) {
-    const frames = elements.filter((element) => element.type === "frame");
-
-    const exportedFrameIds = frames.reduce((acc, frame) => {
-      acc[frame.id] = true;
-      return acc;
-    }, {} as Record<string, true>);
-
-    // elements in a frame do not affect the canvas size if we're not exporting
-    // the whole canvas
-    elements = elements.filter(
-      (element) => !exportedFrameIds[element.frameId ?? ""],
-    );
-  }
-
+): Bounds => {
   const [minX, minY, maxX, maxY] = getCommonBounds(elements);
   const width = distance(minX, maxX);
   const height = distance(minY, maxY);
