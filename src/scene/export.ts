@@ -12,7 +12,7 @@ import {
   getElementAbsoluteCoords,
 } from "../element/bounds";
 import { renderStaticScene, renderSceneToSvg } from "../renderer/renderScene";
-import { distance, getFontString, isOnlyExportingSingleFrame } from "../utils";
+import { distance, getFontString } from "../utils";
 import { AppState, BinaryFiles } from "../types";
 import {
   DEFAULT_BACKGROUND_COLOR,
@@ -540,13 +540,6 @@ export const exportToCanvas = async ({
   const canvas = cfg.createCanvas
     ? cfg.createCanvas()
     : document.createElement("canvas");
-
-  const onlyExportingSingleFrame = isOnlyExportingSingleFrame(elements);
-
-  // hack fix until we decide whose responsibility this should be
-  if (onlyExportingSingleFrame) {
-    cfg.padding = 0;
-  }
 
   // rescale padding based on current canvasScale factor so that the resulting
   // padding is kept the same as supplied by user (with the exception of

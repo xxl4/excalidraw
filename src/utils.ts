@@ -821,19 +821,6 @@ export const composeEventHandlers = <E>(
   };
 };
 
-export const isOnlyExportingSingleFrame = (
-  elements: readonly NonDeletedExcalidrawElement[],
-) => {
-  const frames = elements.filter((element) => element.type === "frame");
-
-  return (
-    frames.length === 1 &&
-    elements.every(
-      (element) => element.type === "frame" || element.frameId === frames[0].id,
-    )
-  );
-};
-
 /**
  * supply `null` as message if non-never value is valid, you just need to
  * typecheck against it
