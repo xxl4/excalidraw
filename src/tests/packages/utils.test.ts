@@ -9,15 +9,13 @@ import { exportToCanvas } from "../../scene/export";
 const exportToSvgSpy = vi.spyOn(mockedSceneExportUtils, "exportToSvg");
 
 describe("exportToCanvas", async () => {
-  const EXPORT_PADDING = 10;
-
   it("with default arguments", async () => {
     const canvas = await exportToCanvas({
       data: diagramFactory({ elementOverrides: { width: 100, height: 100 } }),
     });
 
-    expect(canvas.width).toBe(100 + 2 * EXPORT_PADDING);
-    expect(canvas.height).toBe(100 + 2 * EXPORT_PADDING);
+    expect(canvas.width).toBe(100);
+    expect(canvas.height).toBe(100);
   });
 
   it("when custom width and height", async () => {

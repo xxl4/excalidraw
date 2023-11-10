@@ -10,8 +10,8 @@ import {
 } from "../clipboard";
 import { actionDeleteSelected } from "./actionDeleteSelected";
 import { exportAsImage } from "../data/index";
-import { getNonDeletedElements, isTextElement } from "../element";
-import { exportCanvas, prepareElementsForExport } from "../data/index";
+import { isTextElement } from "../element";
+import { prepareElementsForExport } from "../data/index";
 import { t } from "../i18n";
 import { isFirefox } from "../constants";
 

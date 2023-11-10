@@ -411,7 +411,7 @@ const bootstrapCanvas = ({
   theme?: AppState["theme"];
   // static canvas only
   isExporting?: StaticCanvasRenderConfig["isExporting"];
-  canvasBackgroundColor?: StaticCanvasRenderConfig["canvasBackgroundColor"];
+  canvasBackgroundColor?: string | null;
 }): CanvasRenderingContext2D => {
   const context = canvas.getContext("2d")!;
 

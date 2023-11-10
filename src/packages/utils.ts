@@ -26,7 +26,6 @@ type ExportToSvgConfig = Pick<
   ExportToCanvasConfig,
   "canvasBackgroundColor" | "padding" | "theme" | "exportingFrame"
 > & {
-  exportPadding?: number;
   renderEmbeddables?: boolean;
 };
 
