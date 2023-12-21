@@ -8,7 +8,7 @@ import { waitFor } from "@testing-library/react";
 import { createUndoAction, createRedoAction } from "../actions/actionHistory";
 import { EXPORT_DATA_TYPES, MIME_TYPES } from "../constants";
 import { ExcalidrawImperativeAPI } from "../types";
-import { resolvablePromise } from "../utils";
+import { arrayToMap, resolvablePromise } from "../utils";
 import { COLOR_PALETTE } from "../colors";
 import { KEYS } from "../keys";
 import { newElementWith } from "../element/mutateElement";
@@ -16,7 +16,16 @@ import {
   ExcalidrawGenericElement,
   ExcalidrawTextElement,
 } from "../element/types";
+import {
+  actionSendBackward,
+  actionBringForward,
+  actionSendToBack,
+} from "../actions";
 import { vi } from "vitest";
+import {
+  fixFractionalIndices,
+  restoreFractionalIndices,
+} from "../fractionalIndex";
 
 const { h } = window;
 
@@ -231,7 +240,7 @@ describe("history", () => {
     );
   });
 
-  it("undo/redo should support basic element creation, selection and deletion", async () => {
+  it("undo/redo supports basic element creation, selection and deletion", async () => {
     await render(<Excalidraw handleKeyboardGlobally={true} />);
 
     const rect1 = UI.createElement("rectangle", { x: 10 });
@@ -339,6 +348,71 @@ describe("history", () => {
       expect.objectContaining({ id: rect1.id, isDeleted: false }),
       expect.objectContaining({ id: rect2.id, isDeleted: true }),
       expect.objectContaining({ id: rect3.id, isDeleted: true }),
+    ]);
+  });
+
+  it("undo/redo supports z-index actions", async () => {
+    await render(<Excalidraw handleKeyboardGlobally={true} />);
+
+    const rect1 = UI.createElement("rectangle", { x: 10 });
+    const rect2 = UI.createElement("rectangle", { x: 20, y: 20 });
+    const rect3 = UI.createElement("rectangle", { x: 40, y: 40 });
+
+    h.app.actionManager.executeAction(actionSendBackward);
+
+    expect(API.getUndoStack().length).toBe(4);
+    expect(API.getRedoStack().length).toBe(0);
+    assertSelectedElements(rect3);
+
+    Keyboard.undo();
+    expect(API.getUndoStack().length).toBe(3);
+    expect(API.getRedoStack().length).toBe(1);
+    assertSelectedElements(rect3);
+    expect(h.elements).toEqual([
+      expect.objectContaining({ id: rect1.id }),
+      expect.objectContaining({ id: rect2.id }),
+      expect.objectContaining({ id: rect3.id }),
+    ]);
+
+    Keyboard.redo();
+    expect(API.getUndoStack().length).toBe(4);
+    expect(API.getRedoStack().length).toBe(0);
+    assertSelectedElements(rect3);
+    expect(h.elements).toEqual([
+      expect.objectContaining({ id: rect1.id }),
+      expect.objectContaining({ id: rect3.id }),
+      expect.objectContaining({ id: rect2.id }),
+    ]);
+
+    mouse.select([rect1, rect3]);
+    expect(API.getUndoStack().length).toBe(6);
+    expect(API.getRedoStack().length).toBe(0);
+    assertSelectedElements([rect1, rect3]);
+
+    h.app.actionManager.executeAction(actionBringForward);
+
+    expect(API.getUndoStack().length).toBe(7);
+    expect(API.getRedoStack().length).toBe(0);
+    assertSelectedElements([rect1, rect3]);
+
+    Keyboard.undo();
+    expect(API.getUndoStack().length).toBe(6);
+    expect(API.getRedoStack().length).toBe(1);
+    assertSelectedElements([rect1, rect3]);
+    expect(h.elements).toEqual([
+      expect.objectContaining({ id: rect1.id }),
+      expect.objectContaining({ id: rect3.id }),
+      expect.objectContaining({ id: rect2.id }),
+    ]);
+
+    Keyboard.redo();
+    expect(API.getUndoStack().length).toBe(7);
+    expect(API.getRedoStack().length).toBe(0);
+    assertSelectedElements([rect1, rect3]);
+    expect(h.elements).toEqual([
+      expect.objectContaining({ id: rect2.id }),
+      expect.objectContaining({ id: rect1.id }),
+      expect.objectContaining({ id: rect3.id }),
     ]);
   });
 
@@ -908,6 +982,102 @@ describe("history", () => {
         expect.objectContaining({ id: rect1.id, isDeleted: false }),
         expect.objectContaining({ id: rect2.id, isDeleted: false }),
         expect.objectContaining({ id: rect3.id, isDeleted: false }),
+      ]);
+    });
+
+    it("should iterate through the history when z-index changes do not produce visible change", async () => {
+      const rect1 = API.createElement({ type: "rectangle", x: 10, y: 10 });
+      const rect2 = API.createElement({ type: "rectangle", x: 20, y: 20 });
+      const rect3 = API.createElement({ type: "rectangle", x: 30, y: 30 });
+
+      const restored = restoreFractionalIndices([rect1, rect2, rect3]);
+
+      h.elements = restored;
+
+      mouse.select(rect2);
+      h.app.actionManager.executeAction(actionSendToBack);
+
+      expect(API.getUndoStack().length).toBe(2);
+      expect(API.getRedoStack().length).toBe(0);
+      assertSelectedElements([rect2]);
+      expect(h.elements).toEqual([
+        expect.objectContaining({ id: rect2.id }),
+        expect.objectContaining({ id: rect1.id }),
+        expect.objectContaining({ id: rect3.id }),
+      ]);
+
+      const remoteElements1 = [
+        h.elements[2], // rect3
+        h.elements[0], // rect2
+        h.elements[1], // rect1
+      ];
+      fixFractionalIndices(remoteElements1, arrayToMap([remoteElements1[0]]));
+
+      // Simulate remote update
+      excalidrawAPI.updateScene({
+        elements: remoteElements1,
+      });
+
+      Keyboard.undo();
+      expect(API.getUndoStack().length).toBe(1);
+      expect(API.getRedoStack().length).toBe(1);
+      assertSelectedElements([rect2]);
+      expect(h.elements).toEqual([
+        expect.objectContaining({ id: rect3.id }),
+        expect.objectContaining({ id: rect1.id }),
+        expect.objectContaining({ id: rect2.id }),
+      ]);
+
+      Keyboard.redo();
+      expect(API.getUndoStack().length).toBe(2);
+      expect(API.getRedoStack().length).toBe(0);
+      assertSelectedElements([rect2]);
+      expect(h.elements).toEqual([
+        expect.objectContaining({ id: rect3.id }),
+        expect.objectContaining({ id: rect2.id }),
+        expect.objectContaining({ id: rect1.id }),
+      ]);
+
+      const remoteElements2 = [
+        h.elements[2], // rect1
+        h.elements[0], // rect3
+        h.elements[1], // rect2
+      ];
+      fixFractionalIndices(remoteElements2, arrayToMap([remoteElements2[0]]));
+
+      // Simulate remote update
+      excalidrawAPI.updateScene({
+        elements: remoteElements2,
+      });
+
+      Keyboard.undo();
+      expect(API.getUndoStack().length).toBe(0);
+      expect(API.getRedoStack().length).toBe(2); // not we iterated two steps back!
+      assertSelectedElements([]);
+      expect(h.elements).toEqual([
+        expect.objectContaining({ id: rect1.id }),
+        expect.objectContaining({ id: rect3.id }),
+        expect.objectContaining({ id: rect2.id }),
+      ]);
+
+      Keyboard.redo();
+      expect(API.getUndoStack().length).toBe(1);
+      expect(API.getRedoStack().length).toBe(1);
+      assertSelectedElements([rect2]);
+      expect(h.elements).toEqual([
+        expect.objectContaining({ id: rect1.id }),
+        expect.objectContaining({ id: rect2.id }),
+        expect.objectContaining({ id: rect3.id }),
+      ]);
+
+      Keyboard.redo();
+      expect(API.getUndoStack().length).toBe(2);
+      expect(API.getRedoStack().length).toBe(0);
+      assertSelectedElements([rect2]);
+      expect(h.elements).toEqual([
+        expect.objectContaining({ id: rect2.id }),
+        expect.objectContaining({ id: rect1.id }),
+        expect.objectContaining({ id: rect3.id }),
       ]);
     });
 

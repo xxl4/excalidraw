@@ -269,7 +269,6 @@ import {
   muteFSAbortError,
   isTestEnv,
   easeOut,
-  arrayToMap,
   updateStable,
   addEventListener,
   isShallowEqual,
