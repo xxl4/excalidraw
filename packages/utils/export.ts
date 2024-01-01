@@ -1,23 +1,26 @@
 import {
   exportToCanvas as _exportToCanvas,
   exportToSvg as _exportToSvg,
-} from "../excalidraw/scene/export";
-import { getDefaultAppState } from "../excalidraw/appState";
-import { AppState, BinaryFiles } from "../excalidraw/types";
-import {
+} from "@excalidraw/excalidraw";
+import { getDefaultAppState } from "@excalidraw/excalidraw";
+import type {
+  AppState,
+  BinaryFiles,
+} from "@excalidraw/excalidraw/dist/excalidraw/types";
+import type {
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
   NonDeleted,
-} from "../excalidraw/element/types";
-import { restore } from "../excalidraw/data/restore";
-import { MIME_TYPES } from "../excalidraw/constants";
-import { encodePngMetadata } from "../excalidraw/data/image";
-import { serializeAsJSON } from "../excalidraw/data/json";
+} from "@excalidraw/excalidraw/dist/excalidraw/element/types";
+import { restore } from "@excalidraw/excalidraw";
+import { MIME_TYPES } from "@excalidraw/excalidraw";
+import { encodePngMetadata } from "@excalidraw/excalidraw";
+import { serializeAsJSON } from "@excalidraw/excalidraw";
 import {
   copyBlobToClipboardAsPng,
   copyTextToSystemClipboard,
   copyToClipboard,
-} from "../excalidraw/clipboard";
+} from "@excalidraw/excalidraw";
 
 export { MIME_TYPES };
 
@@ -206,20 +209,16 @@ export const exportToClipboard = async (
   }
 };
 
-export * from "./bbox";
-export {
-  elementsOverlappingBBox,
-  isElementInsideBBox,
-  elementPartiallyOverlapsWithOrContainsBBox,
-} from "./withinBounds";
-export {
-  serializeAsJSON,
-  serializeLibraryAsJSON,
-} from "../excalidraw/data/json";
-export {
-  loadFromBlob,
-  loadSceneOrLibraryFromBlob,
-  loadLibraryFromBlob,
-} from "../excalidraw/data/blob";
-export { getFreeDrawSvgPath } from "../excalidraw/renderer/renderElement";
-export { mergeLibraryItems } from "../excalidraw/data/library";
+// All this we should move to utils package instead or stop exporting from utils package
+
+// export {
+//   serializeAsJSON,
+//   serializeLibraryAsJSON,
+// } from "../excalidraw/data/json";
+// export {
+//   loadFromBlob,
+//   loadSceneOrLibraryFromBlob,
+//   loadLibraryFromBlob,
+// } from "../excalidraw/data/blob";
+// export { getFreeDrawSvgPath } from "../excalidraw/renderer/renderElement";
+// export { mergeLibraryItems } from "../excalidraw/data/library";

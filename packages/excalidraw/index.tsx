@@ -220,7 +220,7 @@ export {
   getFreeDrawSvgPath,
   exportToClipboard,
   mergeLibraryItems,
-} from "../utils/export";
+} from "@excalidraw/utils";
 export { isLinearElement } from "./element/typeChecks";
 
 export { FONT_FAMILY, THEME, MIME_TYPES } from "./constants";
@@ -253,10 +253,24 @@ export { TTDDialogTrigger } from "./components/TTDDialog/TTDDialogTrigger";
 export { normalizeLink } from "./data/url";
 export { zoomToFitBounds } from "./actions/actionCanvas";
 export { convertToExcalidrawElements } from "./data/transform";
-export { getCommonBounds, getVisibleSceneBounds } from "./element/bounds";
+export {
+  getCommonBounds,
+  getVisibleSceneBounds,
+  getElementBounds,
+  Bounds,
+} from "./element/bounds";
 
 export {
   elementsOverlappingBBox,
   isElementInsideBBox,
   elementPartiallyOverlapsWithOrContainsBBox,
 } from "../utils/export";
+
+export { getDefaultAppState } from "./appState";
+export { isValueInRange, rotatePoint } from "./math";
+export {
+  isArrowElement,
+  isExcalidrawElement,
+  isFreeDrawElement,
+  isTextElement,
+} from "./element/typeChecks";

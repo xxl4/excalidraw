@@ -2,6 +2,7 @@
   "name": "@excalidraw/utils",
   "version": "0.1.2",
   "main": "dist/excalidraw-utils.min.js",
+  "sideEffects": false,
   "files": [
     "dist/*"
   ],
@@ -33,6 +34,9 @@
       "last 1 safari version"
     ]
   },
+  "dependencies": {
+    "@excalidraw/excalidraw": "workspace:^"
+  },
   "devDependencies": {
     "@babel/core": "7.18.9",
     "@babel/plugin-transform-arrow-functions": "7.18.6",
@@ -55,7 +59,7 @@
   "bugs": "https://github.com/excalidraw/excalidraw/issues",
   "repository": "https://github.com/excalidraw/excalidraw",
   "scripts": {
-    "build:umd": "cross-env NODE_ENV=production webpack --config webpack.prod.config.js",
+    "build:esm": "rm -rf dist && node ../../scripts/buildPackageUtils.js",
     "build:umd:withAnalyzer": "cross-env NODE_ENV=production ANALYZER=true webpack --config webpack.prod.config.js",
     "pack": "yarn build:umd && yarn pack"
   }
