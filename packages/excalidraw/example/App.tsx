@@ -14,7 +14,7 @@ import {
 import { EVENT, ROUNDNESS } from "../constants";
 import { distance2d } from "../math";
 import { fileOpen } from "../data/filesystem";
-import { loadSceneOrLibraryFromBlob } from "../../utils";
+import { loadSceneOrLibraryFromBlob } from "../data/blob";
 import type {
   AppState,
   BinaryFileData,
