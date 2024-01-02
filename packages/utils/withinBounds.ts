@@ -1,19 +1,21 @@
-import type {
-  ExcalidrawElement,
-  ExcalidrawFreeDrawElement,
-  ExcalidrawLinearElement,
-  NonDeletedExcalidrawElement,
-} from "../excalidraw/element/types";
 import {
   isArrowElement,
   isExcalidrawElement,
   isFreeDrawElement,
   isLinearElement,
   isTextElement,
-} from "../excalidraw/element/typeChecks";
-import { isValueInRange, rotatePoint } from "../excalidraw/math";
+  isValueInRange,
+  rotatePoint,
+  getElementBounds,
+} from "../excalidraw/index";
+
+import type {
+  ExcalidrawElement,
+  ExcalidrawFreeDrawElement,
+  ExcalidrawLinearElement,
+  NonDeletedExcalidrawElement,
+} from "../excalidraw/element/types";
 import type { Point } from "../excalidraw/types";
-import { getElementBounds } from "../excalidraw/element";
 import type { Bounds } from "../excalidraw/element/bounds";
 
 type Element = NonDeletedExcalidrawElement;
