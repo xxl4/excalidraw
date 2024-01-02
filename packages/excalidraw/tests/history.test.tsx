@@ -8,7 +8,7 @@ import { waitFor } from "@testing-library/react";
 import { createUndoAction, createRedoAction } from "../actions/actionHistory";
 import { EXPORT_DATA_TYPES, MIME_TYPES } from "../constants";
 import { ExcalidrawImperativeAPI } from "../types";
-import { arrayToMap, resolvablePromise } from "../utils";
+import { resolvablePromise } from "../utils";
 import { COLOR_PALETTE } from "../colors";
 import { KEYS } from "../keys";
 import { newElementWith } from "../element/mutateElement";
@@ -22,10 +22,6 @@ import {
   actionSendToBack,
 } from "../actions";
 import { vi } from "vitest";
-import {
-  fixFractionalIndices,
-  restoreFractionalIndices,
-} from "../fractionalIndex";
 
 const { h } = window;
 
@@ -145,21 +141,34 @@ describe("history", () => {
 
     await waitFor(() => expect(API.getUndoStack().length).toBe(1));
     expect(h.state.viewBackgroundColor).toBe("#000");
-    expect(h.elements).toEqual([
+    expect(API.getSnapshot()).toEqual([
       expect.objectContaining({ id: "A", isDeleted: true }),
+      expect.objectContaining({ id: "B", isDeleted: false }),
+    ]);
+    expect(h.elements).toEqual([
       expect.objectContaining({ id: "B", isDeleted: false }),
     ]);
 
     const undoAction = createUndoAction(h.history, h.store);
     const redoAction = createRedoAction(h.history, h.store);
     h.app.actionManager.executeAction(undoAction);
+
+    expect(API.getSnapshot()).toEqual([
+      expect.objectContaining({ id: "A", isDeleted: false }),
+      expect.objectContaining({ id: "B", isDeleted: true }),
+    ]);
     expect(h.elements).toEqual([
       expect.objectContaining({ id: "A", isDeleted: false }),
       expect.objectContaining({ id: "B", isDeleted: true }),
     ]);
     expect(h.state.viewBackgroundColor).toBe("#FFF");
+
     h.app.actionManager.executeAction(redoAction);
     expect(h.state.viewBackgroundColor).toBe("#000");
+    expect(API.getSnapshot()).toEqual([
+      expect.objectContaining({ id: "A", isDeleted: true }),
+      expect.objectContaining({ id: "B", isDeleted: false }),
+    ]);
     expect(h.elements).toEqual([
       expect.objectContaining({ id: "A", isDeleted: true }),
       expect.objectContaining({ id: "B", isDeleted: false }),
@@ -990,9 +999,7 @@ describe("history", () => {
       const rect2 = API.createElement({ type: "rectangle", x: 20, y: 20 });
       const rect3 = API.createElement({ type: "rectangle", x: 30, y: 30 });
 
-      const restored = restoreFractionalIndices([rect1, rect2, rect3]);
-
-      h.elements = restored;
+      h.elements = [rect1, rect2, rect3];
 
       mouse.select(rect2);
       h.app.actionManager.executeAction(actionSendToBack);
@@ -1006,16 +1013,13 @@ describe("history", () => {
         expect.objectContaining({ id: rect3.id }),
       ]);
 
-      const remoteElements1 = [
-        h.elements[2], // rect3
-        h.elements[0], // rect2
-        h.elements[1], // rect1
-      ];
-      fixFractionalIndices(remoteElements1, arrayToMap([remoteElements1[0]]));
-
       // Simulate remote update
       excalidrawAPI.updateScene({
-        elements: remoteElements1,
+        elements: [
+          h.elements[2], // rect3
+          h.elements[0], // rect2
+          h.elements[1], // rect1
+        ],
       });
 
       Keyboard.undo();
@@ -1038,16 +1042,13 @@ describe("history", () => {
         expect.objectContaining({ id: rect1.id }),
       ]);
 
-      const remoteElements2 = [
-        h.elements[2], // rect1
-        h.elements[0], // rect3
-        h.elements[1], // rect2
-      ];
-      fixFractionalIndices(remoteElements2, arrayToMap([remoteElements2[0]]));
-
       // Simulate remote update
       excalidrawAPI.updateScene({
-        elements: remoteElements2,
+        elements: [
+          h.elements[2], // rect1
+          h.elements[0], // rect3
+          h.elements[1], // rect2
+        ],
       });
 
       Keyboard.undo();
@@ -1086,13 +1087,13 @@ describe("history", () => {
       mouse.down(10, 10);
       mouse.moveTo(30, 30);
 
-      // Simulate remote update
-      const rect = API.createElement({
+      const rectProps = {
         type: "rectangle",
         strokeColor: blue,
-      });
+      } as const;
 
-      const rectCopy = { ...rect };
+      // Simulate remote update
+      const rect = API.createElement({ ...rectProps });
 
       // Simulate remote update
       excalidrawAPI.updateScene({
@@ -1112,7 +1113,7 @@ describe("history", () => {
           type: "freedraw",
           isDeleted: true,
         }),
-        expect.objectContaining(rectCopy),
+        expect.objectContaining(rectProps),
       ]);
 
       Keyboard.redo();
@@ -1124,7 +1125,7 @@ describe("history", () => {
           type: "freedraw",
           isDeleted: false,
         }),
-        expect.objectContaining(rectCopy),
+        expect.objectContaining(rectProps),
       ]);
     });
 
@@ -1138,12 +1139,12 @@ describe("history", () => {
       assertSelectedElements(rect1);
       expect(API.getUndoStack().length).toBe(1);
 
-      const rect3 = API.createElement({
+      const rect3Props = {
         type: "rectangle",
         strokeColor: blue,
-      });
+      } as const;
 
-      const rect3Copy = { ...rect3 };
+      const rect3 = API.createElement({ ...rect3Props });
 
       // // Simulate remote update
       excalidrawAPI.updateScene({
@@ -1164,7 +1165,7 @@ describe("history", () => {
           width: 90,
           height: 90,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.undo();
@@ -1175,7 +1176,7 @@ describe("history", () => {
           ...props1,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.undo();
@@ -1186,7 +1187,7 @@ describe("history", () => {
           ...props1,
           isDeleted: true,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.redo();
@@ -1197,7 +1198,7 @@ describe("history", () => {
           ...props1,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.redo();
@@ -1212,7 +1213,7 @@ describe("history", () => {
           width: 90,
           height: 90,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
     });
 
@@ -1227,12 +1228,12 @@ describe("history", () => {
       assertSelectedElements(rect1, rect2);
       expect(API.getUndoStack().length).toBe(4);
 
-      const rect3 = API.createElement({
+      const rect3Props = {
         type: "rectangle",
         strokeColor: blue,
-      });
+      } as const;
 
-      const rect3Copy = { ...rect3 };
+      const rect3 = API.createElement({ ...rect3Props });
 
       // Simulate remote update
       excalidrawAPI.updateScene({
@@ -1258,7 +1259,7 @@ describe("history", () => {
           y: 110,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.undo();
@@ -1276,7 +1277,7 @@ describe("history", () => {
           y: 30,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.undo();
@@ -1300,7 +1301,7 @@ describe("history", () => {
           y: 30,
           isDeleted: true,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.undo();
@@ -1318,7 +1319,7 @@ describe("history", () => {
           y: 30,
           isDeleted: true,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.redo();
@@ -1336,7 +1337,7 @@ describe("history", () => {
           y: 30,
           isDeleted: true,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.redo();
@@ -1360,7 +1361,7 @@ describe("history", () => {
           y: 30,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
 
       Keyboard.redo();
@@ -1380,7 +1381,7 @@ describe("history", () => {
           y: 110,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Copy),
+        expect.objectContaining(rect3Props),
       ]);
     });
 
