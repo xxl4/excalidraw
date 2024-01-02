@@ -12,7 +12,6 @@ const browserConfig = {
 function getFiles(dir, files = []) {
   const fileList = fs.readdirSync(dir);
   for (const file of fileList) {
-    console.log("HEYYY----", file);
     const name = `${dir}/${file}`;
     if (
       name.includes("node_modules") ||
@@ -73,7 +72,6 @@ const filesToTransform = filesinExcalidrawPackage.filter((file) => {
     file.includes("example")
   );
 });
-console.log(filesToTransform);
 const createESMRawBuild = async () => {
   // Development unminified build with source maps
   await build({
@@ -85,4 +83,4 @@ const createESMRawBuild = async () => {
 };
 
 createESMRawBuild();
-//createESMBrowserBuild();
+createESMBrowserBuild();
