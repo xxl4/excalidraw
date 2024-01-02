@@ -212,15 +212,17 @@ export {
   exportToCanvas,
   exportToBlob,
   exportToSvg,
-  serializeAsJSON,
-  serializeLibraryAsJSON,
+  exportToClipboard,
+} from "../utils/index";
+
+export { serializeAsJSON, serializeLibraryAsJSON } from "./data/json";
+
+export {
   loadLibraryFromBlob,
   loadFromBlob,
   loadSceneOrLibraryFromBlob,
-  getFreeDrawSvgPath,
-  exportToClipboard,
-  mergeLibraryItems,
-} from "@excalidraw/utils";
+} from "./data/blob";
+
 export { isLinearElement } from "./element/typeChecks";
 
 export { FONT_FAMILY, THEME, MIME_TYPES } from "./constants";
@@ -231,7 +233,11 @@ export {
   bumpVersion,
 } from "./element/mutateElement";
 
-export { parseLibraryTokensFromUrl, useHandleLibrary } from "./data/library";
+export {
+  parseLibraryTokensFromUrl,
+  useHandleLibrary,
+  mergeLibraryItems,
+} from "./data/library";
 
 export {
   sceneCoordsToViewportCoords,
@@ -257,14 +263,7 @@ export {
   getCommonBounds,
   getVisibleSceneBounds,
   getElementBounds,
-  Bounds,
 } from "./element/bounds";
-
-export {
-  elementsOverlappingBBox,
-  isElementInsideBBox,
-  elementPartiallyOverlapsWithOrContainsBBox,
-} from "../utils/export";
 
 export { getDefaultAppState } from "./appState";
 export { isValueInRange, rotatePoint } from "./math";
@@ -274,3 +273,5 @@ export {
   isFreeDrawElement,
   isTextElement,
 } from "./element/typeChecks";
+
+export { getFreeDrawSvgPath } from "./renderer/renderElement";

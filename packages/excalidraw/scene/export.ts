@@ -26,7 +26,7 @@ import {
   getInitializedImageElements,
   updateImageCache,
 } from "../element/image";
-import { elementsOverlappingBBox } from "@excalidraw/utils";
+import { elementsOverlappingBBox } from "../../utils/index";
 import {
   getFrameLikeElements,
   getFrameLikeTitle,

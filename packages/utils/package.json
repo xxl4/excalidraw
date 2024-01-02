@@ -34,9 +34,7 @@
       "last 1 safari version"
     ]
   },
-  "dependencies": {
-    "@excalidraw/excalidraw": "workspace:^"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@babel/core": "7.18.9",
     "@babel/plugin-transform-arrow-functions": "7.18.6",
