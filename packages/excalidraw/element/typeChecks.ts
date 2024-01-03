@@ -1,4 +1,3 @@
-import { ROUNDNESS } from "../constants";
 import { ElementOrToolType } from "../types";
 import { MarkNonNullable } from "../utility-types";
 import { assertNever } from "../utils";
@@ -21,6 +20,25 @@ import {
   ExcalidrawIframeLikeElement,
   ExcalidrawMagicFrameElement,
 } from "./types";
+
+const ROUNDNESS = {
+  // Used for legacy rounding (rectangles), which currently works the same
+  // as PROPORTIONAL_RADIUS, but we need to differentiate for UI purposes and
+  // forwards-compat.
+  LEGACY: 1,
+
+  // Used for linear elements & diamonds
+  PROPORTIONAL_RADIUS: 2,
+
+  // Current default algorithm for rectangles, using fixed pixel radius.
+  // It's working similarly to a regular border-radius, but attemps to make
+  // radius visually similar across differnt element sizes, especially
+  // very large and very small elements.
+  //
+  // NOTE right now we don't allow configuration and use a constant radius
+  // (see DEFAULT_ADAPTIVE_RADIUS constant)
+  ADAPTIVE_RADIUS: 3,
+} as const;
 
 export const isInitializedImageElement = (
   element: ExcalidrawElement | null,

@@ -1,13 +1,13 @@
+import { getElementBounds } from "../excalidraw/element/bounds";
+
+import { isValueInRange, rotatePoint } from "../shared/math";
 import {
   isArrowElement,
   isExcalidrawElement,
   isFreeDrawElement,
   isLinearElement,
   isTextElement,
-  isValueInRange,
-  rotatePoint,
-  getElementBounds,
-} from "../excalidraw/index";
+} from "../shared/element/typeChecks";
 
 import type {
   ExcalidrawElement,

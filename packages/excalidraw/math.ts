@@ -1,4 +1,4 @@
-import { NormalizedZoomValue, Point, Zoom } from "./types";
+import type { NormalizedZoomValue, Point, Zoom } from "./types";
 import {
   DEFAULT_ADAPTIVE_RADIUS,
   LINE_CONFIRM_THRESHOLD,

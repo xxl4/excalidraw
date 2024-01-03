@@ -148,33 +148,7 @@ export const CANVAS_ONLY_ACTIONS = ["selectAll"];
 
 export const GRID_SIZE = 20; // TODO make it configurable?
 
-export const IMAGE_MIME_TYPES = {
-  svg: "image/svg+xml",
-  png: "image/png",
-  jpg: "image/jpeg",
-  gif: "image/gif",
-  webp: "image/webp",
-  bmp: "image/bmp",
-  ico: "image/x-icon",
-  avif: "image/avif",
-  jfif: "image/jfif",
-} as const;
-
 export const ALLOWED_PASTE_MIME_TYPES = ["text/plain", "text/html"] as const;
-
-export const MIME_TYPES = {
-  json: "application/json",
-  // excalidraw data
-  excalidraw: "application/vnd.excalidraw+json",
-  excalidrawlib: "application/vnd.excalidrawlib+json",
-  // image-encoded excalidraw data
-  "excalidraw.svg": "image/svg+xml",
-  "excalidraw.png": "image/png",
-  // binary
-  binary: "application/octet-stream",
-  // image
-  ...IMAGE_MIME_TYPES,
-} as const;
 
 export const EXPORT_IMAGE_TYPES = {
   png: "png",
@@ -381,3 +355,5 @@ export const EDITOR_LS_KEYS = {
   MERMAID_TO_EXCALIDRAW: "mermaid-to-excalidraw",
   PUBLISH_LIBRARY: "publish-library-data",
 } as const;
+
+export { MIME_TYPES, IMAGE_MIME_TYPES } from "../shared/constants";

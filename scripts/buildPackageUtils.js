@@ -1,12 +1,19 @@
 const { build } = require("esbuild");
+const { sassPlugin } = require("esbuild-sass-plugin");
+
 const path = require("path");
 const fs = require("fs");
 
 const browserConfig = {
-  entryPoints: ["index.js"],
+  entryPoints: ["index.ts"],
   bundle: true,
   format: "esm",
   splitting: true,
+  plugins: [sassPlugin()],
+  loader: {
+    ".woff2": "copy",
+    ".ttf": "copy",
+  },
 };
 
 function getFiles(dir, files = []) {
@@ -41,11 +48,13 @@ function getFiles(dir, files = []) {
 }
 const createESMBrowserBuild = async () => {
   // Development unminified build with source maps
-  await build({
+  const result = await build({
     ...browserConfig,
     outdir: "dist/browser/dev",
     sourcemap: true,
+    metafile: true,
   });
+  fs.writeFileSync("meta.json", JSON.stringify(result.metafile));
 
   // production minified build without sourcemaps
   await build({
@@ -82,5 +91,5 @@ const createESMRawBuild = async () => {
   });
 };
 
-createESMRawBuild();
+//createESMRawBuild();
 createESMBrowserBuild();

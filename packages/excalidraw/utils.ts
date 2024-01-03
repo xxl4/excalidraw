@@ -16,7 +16,7 @@ import {
 } from "./types";
 import { unstable_batchedUpdates } from "react-dom";
 import { ResolutionType } from "./utility-types";
-import React from "react";
+import { version as ReactVersion } from "react";
 
 let mockDateTime: string | null = null;
 
@@ -944,7 +944,7 @@ export const isRenderThrottlingEnabled = (() => {
   // getting more complex to maintain the fix
   let IS_REACT_18_AND_UP: boolean;
   try {
-    const version = React.version.split(".");
+    const version = ReactVersion.split(".");
     IS_REACT_18_AND_UP = Number(version[0]) > 17;
   } catch {
     IS_REACT_18_AND_UP = false;

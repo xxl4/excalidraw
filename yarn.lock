@@ -2247,6 +2247,39 @@
   resolved "https://registry.yarnpkg.com/@excalidraw/eslint-config/-/eslint-config-1.0.3.tgz#2122ef7413ae77874ae9848ce0f1c6b3f0d8bbbd"
   integrity sha512-GemHNF5Z6ga0BWBSX7GJaNBUchLu6RwTcAB84eX1MeckRNhNasAsPCdelDlFalz27iS4RuYEQh0bPE8SRxJgbQ==
 
+"@excalidraw/excalidraw@workspace:^":
+  version "0.17.1-7500-ac247a0"
+  resolved "https://registry.yarnpkg.com/@excalidraw/excalidraw/-/excalidraw-0.17.1-7500-ac247a0.tgz#df6ca154b6a31f1f858f2d5fcd81286cd8deb06d"
+  integrity sha512-XsQNkjrQTgw3f4n7DOeCfR5jh6RwfZpYsN3MigfQ6++NuPXuwByrHPVAIus7HUHnsKMg6uCiFeEacMltdJEBew==
+  dependencies:
+    "@braintree/sanitize-url" "6.0.2"
+    "@excalidraw/laser-pointer" "1.2.0"
+    "@excalidraw/mermaid-to-excalidraw" "0.2.0"
+    "@excalidraw/random-username" "1.1.0"
+    "@radix-ui/react-popover" "1.0.3"
+    "@radix-ui/react-tabs" "1.0.2"
+    "@tldraw/vec" "1.7.1"
+    browser-fs-access "0.29.1"
+    canvas-roundrect-polyfill "0.0.1"
+    clsx "1.1.1"
+    cross-env "7.0.3"
+    image-blob-reduce "3.0.1"
+    jotai "1.13.1"
+    lodash.throttle "4.1.1"
+    nanoid "3.3.3"
+    open-color "1.9.1"
+    pako "1.0.11"
+    perfect-freehand "1.2.0"
+    pica "7.1.1"
+    png-chunk-text "1.0.0"
+    png-chunks-encode "1.0.0"
+    png-chunks-extract "1.0.0"
+    points-on-curve "1.0.1"
+    pwacompat "2.0.17"
+    roughjs "4.6.4"
+    sass "1.51.0"
+    tunnel-rat "0.1.2"
+
 "@excalidraw/laser-pointer@1.2.0":
   version "1.2.0"
   resolved "https://registry.yarnpkg.com/@excalidraw/laser-pointer/-/laser-pointer-1.2.0.tgz#cd34ea7d24b11743c726488cc1fcb28c161cacba"

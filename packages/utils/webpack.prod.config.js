@@ -4,8 +4,8 @@ const BundleAnalyzerPlugin =
   require("webpack-bundle-analyzer").BundleAnalyzerPlugin;
 
 module.exports = {
-  mode: "production",
-  entry: { "excalidraw-utils.min": "./index.js" },
+  mode: "development",
+  entry: { "excalidraw-utils.min": "./index.ts" },
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "[name].js",
