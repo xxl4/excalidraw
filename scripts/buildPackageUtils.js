@@ -8,7 +8,6 @@ const browserConfig = {
   entryPoints: ["index.ts"],
   bundle: true,
   format: "esm",
-  splitting: true,
   plugins: [sassPlugin()],
   loader: {
     ".woff2": "copy",

@@ -1,10 +1,12 @@
 import {
   ExcalidrawElement,
   ExcalidrawElementType,
+  ExcalidrawFrameLikeElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
   ExcalidrawTextElement,
   ExcalidrawTextElementWithContainer,
+  InitializedExcalidrawImageElement,
 } from "../../excalidraw/element/types";
 import { ElementOrToolType } from "../../excalidraw/types";
 
@@ -90,6 +92,21 @@ export const isTextElement = (
   element: ExcalidrawElement | null,
 ): element is ExcalidrawTextElement => {
   return element != null && element.type === "text";
+};
+
+export const isFrameLikeElement = (
+  element: ExcalidrawElement | null,
+): element is ExcalidrawFrameLikeElement => {
+  return (
+    element != null &&
+    (element.type === "frame" || element.type === "magicframe")
+  );
+};
+
+export const isInitializedImageElement = (
+  element: ExcalidrawElement | null,
+): element is InitializedExcalidrawImageElement => {
+  return !!element && element.type === "image" && !!element.fileId;
 };
 
 export const isBoundToContainer = (
