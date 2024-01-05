@@ -1,4 +1,4 @@
-import { deflate } from "pako";
+import deflate from "pako/lib/zlib/deflate";
 
 type EncodedData = {
   encoded: string;

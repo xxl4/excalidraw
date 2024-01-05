@@ -71,6 +71,7 @@ export const FONT_FAMILY = {
   Assistant: 4,
 };
 
+export const LINE_CONFIRM_THRESHOLD = 8; // px
 export const DEFAULT_FONT_SIZE = 20;
 export const DEFAULT_FONT_FAMILY: FontFamilyValues = FONT_FAMILY.Virgil;
 export const DEFAULT_TEXT_ALIGN = "left";
@@ -79,3 +80,27 @@ export const THEME = {
   LIGHT: "light",
   DARK: "dark",
 } as const;
+
+export const ROUNDNESS = {
+  // Used for legacy rounding (rectangles), which currently works the same
+  // as PROPORTIONAL_RADIUS, but we need to differentiate for UI purposes and
+  // forwards-compat.
+  LEGACY: 1,
+
+  // Used for linear elements & diamonds
+  PROPORTIONAL_RADIUS: 2,
+
+  // Current default algorithm for rectangles, using fixed pixel radius.
+  // It's working similarly to a regular border-radius, but attemps to make
+  // radius visually similar across differnt element sizes, especially
+  // very large and very small elements.
+  //
+  // NOTE right now we don't allow configuration and use a constant radius
+  // (see DEFAULT_ADAPTIVE_RADIUS constant)
+  ADAPTIVE_RADIUS: 3,
+} as const;
+
+export const DEFAULT_PROPORTIONAL_RADIUS = 0.25;
+
+// Fixed radius for the ADAPTIVE_RADIUS algorithm. In pixels.
+export const DEFAULT_ADAPTIVE_RADIUS = 32;
