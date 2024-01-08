@@ -161,7 +161,7 @@ export const elementsOverlappingBBox = ({
   type: "overlap" | "contain" | "inside";
 }) => {
   if (isExcalidrawElement(bounds)) {
-    bounds = getElementBounds(bounds);
+    bounds = getElementBounds(bounds, elements);
   }
   const adjustedBBox: Bounds = [
     bounds[0] - errorMargin,

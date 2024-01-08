@@ -1,4 +1,5 @@
 import { Drawable, Op } from "roughjs/bin/core";
+import rough from "roughjs/bin/rough";
 
 import {
   Arrowhead,
@@ -6,9 +7,11 @@ import {
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
   ExcalidrawTextElementWithContainer,
+  NonDeletedExcalidrawElement,
 } from "../../excalidraw/element/types";
 import {
   isArrowElement,
+  isBoundToContainer,
   isFreeDrawElement,
   isLinearElement,
   isTextElement,
@@ -21,6 +24,9 @@ import {
   getLinearElementBoundTextElementPosition,
   getLinearElementRotatedBounds,
 } from "./linearElement";
+import { getContainerElement } from "./textElement";
+import { generateRoughOptions } from "../scene/Shape";
+import { Mutable } from "../../excalidraw/utility-types";
 
 export type Bounds = readonly [
   minX: number,
@@ -38,7 +44,10 @@ export class ElementBounds {
     }
   >();
 
-  static getBounds(element: ExcalidrawElement) {
+  static getBounds(
+    element: ExcalidrawElement,
+    sceneElements: readonly NonDeletedExcalidrawElement[],
+  ) {
     const cachedBounds = ElementBounds.boundsCache.get(element);
 
     if (
@@ -51,14 +60,20 @@ export class ElementBounds {
       return cachedBounds.bounds;
     }
 
-    const bounds = ElementBounds.calculateBounds(element);
+    const bounds = ElementBounds.calculateBounds(element, sceneElements);
     return bounds;
   }
 
-  private static calculateBounds(element: ExcalidrawElement): Bounds {
+  private static calculateBounds(
+    element: ExcalidrawElement,
+    sceneElements: readonly NonDeletedExcalidrawElement[],
+  ): Bounds {
     let bounds: Bounds;
 
-    const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(element);
+    const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
+      element,
+      sceneElements,
+    );
 
     if (isFreeDrawElement(element)) {
       const [minX, minY, maxX, maxY] = getBoundsFromPoints(
@@ -74,7 +89,7 @@ export class ElementBounds {
         maxY + element.y,
       ];
     } else if (isLinearElement(element)) {
-      bounds = getLinearElementRotatedBounds(element, cx, cy);
+      bounds = getLinearElementRotatedBounds(element, cx, cy, sceneElements);
     } else if (element.type === "diamond") {
       const [x11, y11] = rotate(cx, y1, cx, cy, element.angle);
       const [x12, y12] = rotate(cx, y2, cx, cy, element.angle);
@@ -109,9 +124,11 @@ export class ElementBounds {
   }
 }
 
-export const getElementBounds = (element: ExcalidrawElement): Bounds => {
-  // need to rewrite so its pure, currently its too nested and ens up importing whole library due to its imports
-  return ElementBounds.getBounds(element);
+export const getElementBounds = (
+  element: ExcalidrawElement,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
+): Bounds => {
+  return ElementBounds.getBounds(element, sceneElements);
 };
 
 export const getBoundsFromPoints = (
@@ -145,20 +162,26 @@ const getFreeDrawElementAbsoluteCoords = (
 
 export const getElementAbsoluteCoords = (
   element: ExcalidrawElement,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
   includeBoundText: boolean = false,
 ): [number, number, number, number, number, number] => {
   if (isFreeDrawElement(element)) {
     return getFreeDrawElementAbsoluteCoords(element);
   } else if (isLinearElement(element)) {
-    return getLinearElementAbsoluteCoords(element, includeBoundText);
+    return getLinearElementAbsoluteCoords(
+      element,
+      sceneElements,
+      includeBoundText,
+    );
   } else if (isTextElement(element)) {
     // need to rewrite or have separate for utils so its pure, currently imports whole library due to Scene
-    const container = getContainerElement(element);
+    const container = getContainerElement(element, sceneElements);
     if (isArrowElement(container)) {
       // need to rewrite or have separate for utils so its pure, currently imports whole library due to its imports
       const coords = getLinearElementBoundTextElementPosition(
         container,
         element as ExcalidrawTextElementWithContainer,
+        sceneElements,
       );
       return [
         coords.x,
@@ -501,4 +524,23 @@ export const getArrowheadPoints = (
   }
 
   return [x2, y2, x3, y3, x4, y4];
+};
+
+export const generateLinearElementShape = (
+  element: ExcalidrawLinearElement,
+): Drawable => {
+  const generator = rough.generator();
+  const options = generateRoughOptions(element);
+
+  const method = (() => {
+    if (element.roundness) {
+      return "curve";
+    }
+    if (options.fill) {
+      return "polygon";
+    }
+    return "linearPath";
+  })();
+
+  return generator[method](element.points as Mutable<Point>[], options);
 };

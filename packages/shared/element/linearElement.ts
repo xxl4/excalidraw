@@ -1,15 +1,16 @@
-import { RoughGenerator } from "roughjs/bin/generator";
-import { Drawable, Op } from "roughjs/bin/core";
+import { Drawable } from "roughjs/bin/core";
 
 import {
   ExcalidrawLinearElement,
   ExcalidrawTextElementWithContainer,
   NonDeleted,
+  NonDeletedExcalidrawElement,
 } from "../../excalidraw/element/types";
 import { ElementShapes } from "../../excalidraw/scene/types";
 import { generateElementShape } from "../scene/Shape";
 import {
   Bounds,
+  generateLinearElementShape,
   getCurvePathOps,
   getElementAbsoluteCoords,
   getMinMaxXYFromCurvePathOps,
@@ -23,9 +24,11 @@ import {
   rotate,
   rotatePoint,
 } from "../math";
+import { getBoundTextElement } from "./textElement";
 
 export const getLinearElementAbsoluteCoords = (
   element: ExcalidrawLinearElement,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
   includeBoundText: boolean = false,
 ): [number, number, number, number, number, number] => {
   let coords: [number, number, number, number, number, number];
@@ -75,22 +78,24 @@ export const getLinearElementAbsoluteCoords = (
     return coords;
   }
   // rewrite this so its pure
-  // const boundTextElement = getBoundTextElement(element);
-  // if (boundTextElement) {
-  //   coords = LinearElementEditor.getMinMaxXYWithBoundText(
-  //     element,
-  //     [x1, y1, x2, y2],
-  //     boundTextElement,
-  //   );
-  // }
+  const boundTextElement = getBoundTextElement(element, sceneElements);
+  if (boundTextElement) {
+    coords = getMinMaxXYWithBoundText(
+      element,
+      [x1, y1, x2, y2],
+      boundTextElement as ExcalidrawTextElementWithContainer,
+      sceneElements,
+    );
+  }
 
   return coords;
 };
 
 const getPointsGlobalCoordinates = (
   element: NonDeleted<ExcalidrawLinearElement>,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
 ): Point[] => {
-  const [x1, y1, x2, y2] = getElementAbsoluteCoords(element);
+  const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, sceneElements);
   const cx = (x1 + x2) / 2;
   const cy = (y1 + y2) / 2;
   return element.points.map((point) => {
@@ -103,8 +108,9 @@ const getPointsGlobalCoordinates = (
 const getPointGlobalCoordinates = (
   element: NonDeleted<ExcalidrawLinearElement>,
   point: Point,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
 ) => {
-  const [x1, y1, x2, y2] = getElementAbsoluteCoords(element);
+  const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, sceneElements);
   const cx = (x1 + x2) / 2;
   const cy = (y1 + y2) / 2;
 
@@ -118,6 +124,7 @@ const getSegmentMidPoint = (
   startPoint: Point,
   endPoint: Point,
   endPointIndex: number,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
 ) => {
   let segmentMidPoint = centerPoint(startPoint, endPoint);
   if (element.points.length > 2 && element.roundness) {
@@ -139,7 +146,11 @@ const getSegmentMidPoint = (
         controlPoints[3],
         t,
       );
-      segmentMidPoint = getPointGlobalCoordinates(element, [tx, ty]);
+      segmentMidPoint = getPointGlobalCoordinates(
+        element,
+        [tx, ty],
+        sceneElements,
+      );
     }
   }
 
@@ -155,8 +166,9 @@ const editorMidPointsCache: {
 export const getLinearElementBoundTextElementPosition = (
   element: ExcalidrawLinearElement,
   boundTextElement: ExcalidrawTextElementWithContainer,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
 ): { x: number; y: number } => {
-  const points = getPointsGlobalCoordinates(element);
+  const points = getPointsGlobalCoordinates(element, sceneElements);
   if (points.length < 2) {
     Object.assign(boundTextElement, { isDeleted: true });
   }
@@ -164,7 +176,11 @@ export const getLinearElementBoundTextElementPosition = (
   let y = 0;
   if (element.points.length % 2 === 1) {
     const index = Math.floor(element.points.length / 2);
-    const midPoint = getPointGlobalCoordinates(element, element.points[index]);
+    const midPoint = getPointGlobalCoordinates(
+      element,
+      element.points[index],
+      sceneElements,
+    );
     x = midPoint[0] - boundTextElement.width / 2;
     y = midPoint[1] - boundTextElement.height / 2;
   } else {
@@ -183,6 +199,7 @@ export const getLinearElementBoundTextElementPosition = (
         points[index],
         points[index + 1],
         index + 1,
+        sceneElements,
       );
     }
     x = midSegmentMidpoint[0] - boundTextElement.width / 2;
@@ -194,8 +211,9 @@ export const getLinearElementBoundTextElementPosition = (
 const getBoundTextElementPosition = (
   element: ExcalidrawLinearElement,
   boundTextElement: ExcalidrawTextElementWithContainer,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
 ): { x: number; y: number } => {
-  const points = getPointsGlobalCoordinates(element);
+  const points = getPointsGlobalCoordinates(element, sceneElements);
   if (points.length < 2) {
     Object.assign(boundTextElement, { isDeleted: true });
   }
@@ -203,7 +221,11 @@ const getBoundTextElementPosition = (
   let y = 0;
   if (element.points.length % 2 === 1) {
     const index = Math.floor(element.points.length / 2);
-    const midPoint = getPointGlobalCoordinates(element, element.points[index]);
+    const midPoint = getPointGlobalCoordinates(
+      element,
+      element.points[index],
+      sceneElements,
+    );
     x = midPoint[0] - boundTextElement.width / 2;
     y = midPoint[1] - boundTextElement.height / 2;
   } else {
@@ -222,6 +244,7 @@ const getBoundTextElementPosition = (
         points[index],
         points[index + 1],
         index + 1,
+        sceneElements,
       );
     }
     x = midSegmentMidpoint[0] - boundTextElement.width / 2;
@@ -234,6 +257,7 @@ const getMinMaxXYWithBoundText = (
   element: ExcalidrawLinearElement,
   elementBounds: Bounds,
   boundTextElement: ExcalidrawTextElementWithContainer,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
 ): [number, number, number, number, number, number] => {
   let [x1, y1, x2, y2] = elementBounds;
   const cx = (x1 + x2) / 2;
@@ -241,6 +265,7 @@ const getMinMaxXYWithBoundText = (
   const { x: boundTextX1, y: boundTextY1 } = getBoundTextElementPosition(
     element,
     boundTextElement,
+    sceneElements,
   );
   const boundTextX2 = boundTextX1 + boundTextElement.width;
   const boundTextY2 = boundTextY1 + boundTextElement.height;
@@ -334,6 +359,7 @@ export const getLinearElementRotatedBounds = (
   element: ExcalidrawLinearElement,
   cx: number,
   cy: number,
+  sceneElements: readonly NonDeletedExcalidrawElement[],
 ): Bounds => {
   if (element.points.length < 2) {
     const [pointX, pointY] = element.points[0];
@@ -346,12 +372,16 @@ export const getLinearElementRotatedBounds = (
     );
 
     let coords: Bounds = [x, y, x, y];
-    const boundTextElement = getBoundTextElement(element);
+    const boundTextElement = getBoundTextElement(
+      element,
+      sceneElements,
+    ) as ExcalidrawTextElementWithContainer;
     if (boundTextElement) {
       const coordsWithBoundText = getMinMaxXYWithBoundText(
         element,
         [x, y, x, y],
         boundTextElement,
+        sceneElements,
       );
       coords = [
         coordsWithBoundText[0],
@@ -364,18 +394,22 @@ export const getLinearElementRotatedBounds = (
   }
 
   // first element is always the curve
-  const shape = generateElementShape(element);
-  const ops = getCurvePathOps(shape);
+  const shape = generateLinearElementShape(element);
+  const ops = getCurvePathOps(shape?.[0]);
   const transformXY = (x: number, y: number) =>
     rotate(element.x + x, element.y + y, cx, cy, element.angle);
   const res = getMinMaxXYFromCurvePathOps(ops, transformXY);
   let coords: Bounds = [res[0], res[1], res[2], res[3]];
-  const boundTextElement = getBoundTextElement(element);
+  const boundTextElement = getBoundTextElement(
+    element,
+    sceneElements,
+  ) as ExcalidrawTextElementWithContainer;
   if (boundTextElement) {
     const coordsWithBoundText = getMinMaxXYWithBoundText(
       element,
       coords,
       boundTextElement,
+      sceneElements,
     );
     coords = [
       coordsWithBoundText[0],
